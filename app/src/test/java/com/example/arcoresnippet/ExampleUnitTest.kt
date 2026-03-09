@@ -1,4 +1,4 @@
-package com.twodigits.arcoresnippet
+package com.example.arcoresnippet
 
 import org.junit.Test
 
