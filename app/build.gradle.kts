@@ -54,6 +54,9 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.kotlinx.serialization.json)
 
+    //ARCore
+    implementation(libs.arCore)
+
     //hilt
     implementation(libs.hilt.android)
     implementation(libs.hilt.navigation.compose)

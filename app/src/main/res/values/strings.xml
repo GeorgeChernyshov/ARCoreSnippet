@@ -1,3 +1,16 @@
 <resources>
     <string name="app_name">ARCoreSnippet</string>
+
+    <!-- welcome -->
+    <string name="welcome_ar_support_not_supported">Not supported</string>
+    <string name="welcome_ar_support_supported">Supported</string>
+    <string name="welcome_ar_support_title">AR Support</string>
+    <string name="welcome_button_grant_permission">Grant Permission</string>
+    <string name="welcome_button_next">Continue</string>
+    <string name="welcome_good_to_go">You are good to go!</string>
+    <string name="welcome_permission_camera">Camera Permission</string>
+    <string name="welcome_permission_coarse_location">Coarse Location Permission</string>
+    <string name="welcome_permission_fine_location">Fine Location Permission</string>
+    <string name="welcome_permission_granted">Permission Granted</string>
+    <string name="welcome_text">This is ARCore application. To proceed, you must give all necessary permissions</string>
 </resources>
