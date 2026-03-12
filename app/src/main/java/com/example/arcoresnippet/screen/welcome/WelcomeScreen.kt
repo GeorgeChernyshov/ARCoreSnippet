@@ -29,7 +29,7 @@ import com.example.arcoresnippet.theme.ARCoreSnippetTheme
 import com.google.ar.core.ArCoreApk
 
 @Composable
-fun WelcomeScreen() {
+fun WelcomeScreen(onNextClick: () -> Unit) {
     val context = LocalContext.current
     val viewModel: AppViewModel = hiltViewModel()
     val appState by viewModel.appState.collectAsState()
@@ -73,7 +73,8 @@ fun WelcomeScreen() {
             fineLocationPermissionLauncher.launch(
                 android.Manifest.permission.ACCESS_FINE_LOCATION
             )
-        }
+        },
+        onNextClick = onNextClick
     )
 }
 
@@ -82,7 +83,8 @@ fun WelcomeScreenContent(
     appState: AppState,
     grantCameraPermission: () -> Unit,
     grantCoarseLocationPermission: () -> Unit,
-    grantFineLocationPermission: () -> Unit
+    grantFineLocationPermission: () -> Unit,
+    onNextClick: () -> Unit
 ) {
     Scaffold { paddingValues ->
         LazyColumn(
@@ -144,7 +146,7 @@ fun WelcomeScreenContent(
                     ) {
                         Text(stringResource(R.string.welcome_good_to_go))
 
-                        Button(onClick = {}) {
+                        Button(onClick = onNextClick) {
                             Text(stringResource(R.string.welcome_button_next))
                         }
                     }
@@ -196,7 +198,8 @@ fun WelcomeScreenContentPreview() {
             appState = AppState(),
             grantCameraPermission = {},
             grantCoarseLocationPermission = {},
-            grantFineLocationPermission = {}
+            grantFineLocationPermission = {},
+            onNextClick = {}
         )
     }
 }

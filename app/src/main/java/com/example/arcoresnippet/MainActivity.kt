@@ -41,7 +41,11 @@ class MainActivity : ComponentActivity() {
                 }
 
                 composable(Screen.Welcome.route) {
-                    WelcomeScreen()
+                    WelcomeScreen(
+                        onNextClick = {
+                            navController.navigate(Screen.ARCore.route)
+                        }
+                    )
                 }
             }
         }

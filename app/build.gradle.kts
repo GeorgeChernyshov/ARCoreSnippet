@@ -56,6 +56,7 @@ dependencies {
 
     //ARCore
     implementation(libs.arCore)
+    implementation(libs.arSceneView)
 
     //hilt
     implementation(libs.hilt.android)
