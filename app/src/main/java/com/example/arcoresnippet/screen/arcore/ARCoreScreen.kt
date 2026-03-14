@@ -1,49 +1,117 @@
 package com.example.arcoresnippet.screen.arcore
 
 import android.util.Log
-import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import com.google.ar.core.ArCoreApk
-import com.google.ar.core.Session
-import com.google.ar.core.exceptions.UnavailableUserDeclinedInstallationException
+import androidx.compose.ui.graphics.Color
+import com.google.ar.core.CameraConfig
+import com.google.ar.core.CameraConfigFilter
+import com.google.ar.core.Config
+import com.google.ar.core.Pose
+import com.google.ar.core.TrackingState
 import io.github.sceneview.ar.ARScene
+import io.github.sceneview.ar.node.AnchorNode
+import io.github.sceneview.node.SphereNode
+import io.github.sceneview.rememberEngine
+import io.github.sceneview.rememberMaterialLoader
+import io.github.sceneview.rememberModelLoader
+import io.github.sceneview.rememberNodes
+import java.util.EnumSet
 
 @Composable
 fun ARCoreScreen() {
-    val activity = LocalActivity.current
-    var session by remember { mutableStateOf<Session?>(null) }
-    var userRequestedInstall by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        try {
-            if (session == null) {
-                when (ArCoreApk.getInstance()
-                    .requestInstall(activity, userRequestedInstall)
-                ) {
-                    ArCoreApk.InstallStatus.INSTALLED -> {
-                        session = Session(activity!!)
-                    }
-
-                    ArCoreApk.InstallStatus.INSTALL_REQUESTED -> {
-                        userRequestedInstall = true
-                        return@LaunchedEffect
-                    }
-                }
-            }
-        } catch (e: UnavailableUserDeclinedInstallationException) {
-            Log.e("ARCoreScreen", "User declined installation", e)
-            return@LaunchedEffect
-        }
-    }
+    val engine = rememberEngine()
+    val modelLoader = rememberModelLoader(engine)
+    val materialLoader = rememberMaterialLoader(engine)
+    val nodes = rememberNodes()
+    var lastLogTime by remember { mutableLongStateOf(0L) }
 
     ARScene(
         modifier = Modifier.fillMaxSize(),
+        engine = engine,
+        modelLoader = modelLoader,
+        materialLoader = materialLoader,
+        sessionConfiguration = { session, config ->
+            val filter = CameraConfigFilter(session).apply {
+                setTargetFps(EnumSet.of(CameraConfig.TargetFps.TARGET_FPS_30))
+            }
+            val cameraConfig = session.getSupportedCameraConfigs(filter).firstOrNull()
+            if (cameraConfig != null) {
+                session.cameraConfig = cameraConfig
+            }
+
+            config.depthMode =
+                when (session.isDepthModeSupported(Config.DepthMode.AUTOMATIC)) {
+                    true -> Config.DepthMode.DISABLED
+                    else -> Config.DepthMode.DISABLED
+                }
+            config.instantPlacementMode = Config.InstantPlacementMode.DISABLED
+            config.lightEstimationMode = Config.LightEstimationMode.DISABLED
+            config.focusMode = Config.FocusMode.FIXED
+            config.updateMode = Config.UpdateMode.LATEST_CAMERA_IMAGE
+        },
+        childNodes = nodes,
+        onSessionUpdated = { session, frame ->
+            // 2. Only place the sphere once ARCore has settled (TrackingState is TRACKING)
+            if (nodes.isEmpty() && frame.camera.trackingState == TrackingState.TRACKING) {
+
+                // 3. Create the Sphere
+                val sphere = SphereNode(
+                    engine = engine,
+                    radius = 0.05f, // 5cm radius = 10cm diameter
+                    materialInstance = materialLoader.createColorInstance(Color.Blue)
+                )
+
+                val cameraPose = frame.camera.pose
+                val targetPose = cameraPose.compose(
+                    Pose.makeTranslation(0f, 0f, -0.2f)
+                )
+                val anchor = session.createAnchor(targetPose)
+
+                val anchorNode = AnchorNode(
+                    engine = engine,
+                    anchor = anchor
+                ).apply {
+                    addChildNode(sphere)
+                }
+
+                nodes.add(anchorNode)
+            }
+
+            val currentTime = System.currentTimeMillis()
+            if (currentTime - lastLogTime >= 3000) { // 3000ms = 3 seconds
+                nodes.firstOrNull()?.let { node ->
+                    val anchorNode = node as? AnchorNode
+                    val anchor = anchorNode?.anchor
+
+                    if (anchor != null && anchor.trackingState == TrackingState.TRACKING) {
+                        val cameraPose = frame.camera.pose
+                        val anchorPose = anchor.pose
+
+                        // Math: Transform Anchor Pose into Camera-Local space
+                        val relativePose = cameraPose.inverse().compose(anchorPose)
+                        val t = relativePose.translation
+                        val distance = kotlin.math.sqrt(t[0]*t[0] + t[1]*t[1] + t[2]*t[2])
+
+                        Log.d("ARDebug", """
+                            --- 3s Update ---
+                            Distance: ${"%.2f".format(distance)}m
+                            Relative Pos: x=${"%.2f".format(t[0])}, y=${"%.2f".format(t[1])}, z=${"%.2f".format(t[2])}
+                            Camera Tracking: ${frame.camera.trackingState}
+                        """.trimIndent())
+
+                        lastLogTime = currentTime
+                    } else if (anchor?.trackingState != TrackingState.TRACKING) {
+                        Log.w("ARDebug", "Anchor Lost Tracking: ${anchor?.trackingState}")
+                        lastLogTime = currentTime
+                    }
+                }
+            }
+        }
     )
 }
