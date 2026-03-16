@@ -22,6 +22,8 @@ import io.github.sceneview.rememberMaterialLoader
 import io.github.sceneview.rememberModelLoader
 import io.github.sceneview.rememberNodes
 import java.util.EnumSet
+import kotlin.math.log
+import kotlin.math.sqrt
 
 @Composable
 fun ARCoreScreen() {
@@ -45,6 +47,7 @@ fun ARCoreScreen() {
                 session.cameraConfig = cameraConfig
             }
 
+            config.geospatialMode = Config.GeospatialMode.ENABLED
             config.depthMode =
                 when (session.isDepthModeSupported(Config.DepthMode.AUTOMATIC)) {
                     true -> Config.DepthMode.DISABLED
@@ -57,6 +60,7 @@ fun ARCoreScreen() {
         },
         childNodes = nodes,
         onSessionUpdated = { session, frame ->
+            val earth = session.earth
             // 2. Only place the sphere once ARCore has settled (TrackingState is TRACKING)
             if (nodes.isEmpty() && frame.camera.trackingState == TrackingState.TRACKING) {
 
@@ -90,20 +94,35 @@ fun ARCoreScreen() {
                     val anchor = anchorNode?.anchor
 
                     if (anchor != null && anchor.trackingState == TrackingState.TRACKING) {
+                        val logContent = StringBuilder()
+                        logContent.appendLine("--- 3s Update ---")
                         val cameraPose = frame.camera.pose
                         val anchorPose = anchor.pose
 
                         // Math: Transform Anchor Pose into Camera-Local space
                         val relativePose = cameraPose.inverse().compose(anchorPose)
                         val t = relativePose.translation
-                        val distance = kotlin.math.sqrt(t[0]*t[0] + t[1]*t[1] + t[2]*t[2])
+                        val distance = sqrt(t[0]*t[0] + t[1]*t[1] + t[2]*t[2])
+                        logContent.appendLine("Distance: ${"%.2f".format(distance)}m")
+                        logContent.append("Relative Pos: ")
+                        logContent.append("x=${"%.2f".format(t[0])}, ")
+                        logContent.append("y=${"%.2f".format(t[1])}, ")
+                        logContent.append("z=${"%.2f".format(t[2])}")
+                        logContent.appendLine()
+                        logContent.appendLine("Camera Tracking: ${frame.camera.trackingState}")
 
-                        Log.d("ARDebug", """
-                            --- 3s Update ---
-                            Distance: ${"%.2f".format(distance)}m
-                            Relative Pos: x=${"%.2f".format(t[0])}, y=${"%.2f".format(t[1])}, z=${"%.2f".format(t[2])}
-                            Camera Tracking: ${frame.camera.trackingState}
-                        """.trimIndent())
+                        val earthState = earth?.earthState
+                        val trackingState = earth?.trackingState
+                        logContent.appendLine("Earth State: $earthState | Tracking State: $trackingState")
+                        if (earth != null && earth.trackingState == TrackingState.TRACKING) {
+                            val pose = earth.cameraGeospatialPose
+                            logContent.append("GPS: ${"%.6f".format(pose.latitude)}, ")
+                            logContent.append("${"%.6f".format(pose.longitude)} | ")
+                            logContent.append("Acc: ${"%.1fm".format(pose.horizontalAccuracy)}")
+                            logContent.appendLine()
+                        }
+
+                        Log.d("ARDebug", logContent.toString())
 
                         lastLogTime = currentTime
                     } else if (anchor?.trackingState != TrackingState.TRACKING) {

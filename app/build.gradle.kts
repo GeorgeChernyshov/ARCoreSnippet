@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.jetbrains.kotlin.android)
@@ -6,6 +8,13 @@ plugins {
     alias(libs.plugins.kotlinSerialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+}
+
+val properties = Properties().apply {
+    val propertiesFile = rootProject.file("local.properties")
+    if (propertiesFile.exists()) {
+        load(propertiesFile.inputStream())
+    }
 }
 
 android {
@@ -20,6 +29,9 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        val apiKey = properties.getProperty("ARCORE_API_KEY") ?: ""
+        manifestPlaceholders["ARCORE_API_KEY"] = apiKey
     }
 
     buildTypes {
@@ -57,6 +69,7 @@ dependencies {
     //ARCore
     implementation(libs.arCore)
     implementation(libs.arSceneView)
+    implementation(libs.play.services.location)
 
     //hilt
     implementation(libs.hilt.android)

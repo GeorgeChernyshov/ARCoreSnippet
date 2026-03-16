@@ -24,6 +24,9 @@
             android:value="required"
             tools:replace="android:value" />
 
+        <meta-data android:name="com.google.android.ar.API_KEY"
+            android:value="${ARCORE_API_KEY}" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
