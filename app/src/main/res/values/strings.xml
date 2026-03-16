@@ -1,6 +1,15 @@
 <resources>
     <string name="app_name">ARCoreSnippet</string>
 
+    <!-- source -->
+    <string name="source_button_camera">Use Camera</string>
+    <string name="source_button_delete">Delete All Recordings</string>
+    <string name="source_button_recording">Use Recording</string>
+    <string name="source_delete_dialog_cancel">Cancel</string>
+    <string name="source_delete_dialog_confirm">Delete</string>
+    <string name="source_delete_dialog_text">This will permanently remove all AR sessions.</string>
+    <string name="source_delete_dialog_title">Delete All?</string>
+
     <!-- welcome -->
     <string name="welcome_ar_support_not_supported">Not supported</string>
     <string name="welcome_ar_support_supported">Supported</string>

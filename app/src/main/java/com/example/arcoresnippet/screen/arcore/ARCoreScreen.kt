@@ -1,18 +1,25 @@
 package com.example.arcoresnippet.screen.arcore
 
+import android.net.Uri
 import android.util.Log
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.google.ar.core.CameraConfig
 import com.google.ar.core.CameraConfigFilter
 import com.google.ar.core.Config
 import com.google.ar.core.Pose
+import com.google.ar.core.RecordingConfig
+import com.google.ar.core.RecordingStatus
 import com.google.ar.core.TrackingState
 import io.github.sceneview.ar.ARScene
 import io.github.sceneview.ar.node.AnchorNode
@@ -21,17 +28,51 @@ import io.github.sceneview.rememberEngine
 import io.github.sceneview.rememberMaterialLoader
 import io.github.sceneview.rememberModelLoader
 import io.github.sceneview.rememberNodes
+import java.io.File
 import java.util.EnumSet
-import kotlin.math.log
 import kotlin.math.sqrt
 
 @Composable
-fun ARCoreScreen() {
+fun ARCoreScreen(recordingPath: String?) {
+    val viewModel: ARCoreViewModel = hiltViewModel()
+    val uiState by viewModel.uiState.collectAsState()
+
+    LaunchedEffect(Unit) {
+        if (recordingPath != null) {
+            viewModel.openRecording(recordingPath)
+        } else {
+            viewModel.createNewRecording()
+        }
+    }
+
+    uiState.fileUri?.let {
+        ARCoreScreenContent(
+            recorderState = uiState.recorderState,
+            fileUri = it
+        )
+    }
+}
+
+@Composable
+fun ARCoreScreenContent(
+    recorderState: ARCoreRecorderState,
+    fileUri: Uri,
+) {
     val engine = rememberEngine()
     val modelLoader = rememberModelLoader(engine)
     val materialLoader = rememberMaterialLoader(engine)
     val nodes = rememberNodes()
     var lastLogTime by remember { mutableLongStateOf(0L) }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            nodes.forEach { node ->
+                node.childNodes.forEach { it.destroy() }
+            }
+
+            nodes.clear()
+        }
+    }
 
     ARScene(
         modifier = Modifier.fillMaxSize(),
@@ -39,32 +80,54 @@ fun ARCoreScreen() {
         modelLoader = modelLoader,
         materialLoader = materialLoader,
         sessionConfiguration = { session, config ->
-            val filter = CameraConfigFilter(session).apply {
-                setTargetFps(EnumSet.of(CameraConfig.TargetFps.TARGET_FPS_30))
-            }
-            val cameraConfig = session.getSupportedCameraConfigs(filter).firstOrNull()
-            if (cameraConfig != null) {
-                session.cameraConfig = cameraConfig
+            if (recorderState == ARCoreRecorderState.PLAYBACK) {
+                val file = File(fileUri.path ?: "")
+                if (file.exists() && file.length() > 0) {
+                    try {
+                        session.setPlaybackDatasetUri(fileUri)
+                        config.geospatialMode = Config.GeospatialMode.DISABLED
+                        config.updateMode = Config.UpdateMode.BLOCKING
+
+                        Log.d("ARDebug", "Playback Configured: ${file.length()} bytes")
+                    } catch (e: Exception) {
+                        Log.e("ARDebug", "Playback setup failed", e)
+                    }
+                }
+            } else {
+                val filter = CameraConfigFilter(session).apply {
+                    setTargetFps(EnumSet.of(CameraConfig.TargetFps.TARGET_FPS_30))
+                }
+                session.getSupportedCameraConfigs(filter).firstOrNull()?.let {
+                    session.cameraConfig = it
+                }
+
+                config.geospatialMode = Config.GeospatialMode.ENABLED
+                config.updateMode = Config.UpdateMode.LATEST_CAMERA_IMAGE
             }
 
-            config.geospatialMode = Config.GeospatialMode.ENABLED
-            config.depthMode =
-                when (session.isDepthModeSupported(Config.DepthMode.AUTOMATIC)) {
-                    true -> Config.DepthMode.DISABLED
-                    else -> Config.DepthMode.DISABLED
-                }
+            config.focusMode = Config.FocusMode.FIXED
+            config.depthMode = Config.DepthMode.DISABLED
             config.instantPlacementMode = Config.InstantPlacementMode.DISABLED
             config.lightEstimationMode = Config.LightEstimationMode.DISABLED
-            config.focusMode = Config.FocusMode.FIXED
-            config.updateMode = Config.UpdateMode.LATEST_CAMERA_IMAGE
         },
         childNodes = nodes,
         onSessionUpdated = { session, frame ->
             val earth = session.earth
-            // 2. Only place the sphere once ARCore has settled (TrackingState is TRACKING)
             if (nodes.isEmpty() && frame.camera.trackingState == TrackingState.TRACKING) {
+                if (recorderState == ARCoreRecorderState.RECORDING &&
+                    session.recordingStatus == RecordingStatus.NONE
+                ) {
+                    try {
+                        val recordingConfig = RecordingConfig(session)
+                            .setMp4DatasetUri(fileUri)
+                            .setAutoStopOnPause(true)
+                        session.startRecording(recordingConfig)
+                        Log.d("ARDebug", "Recording started to: $fileUri")
+                    } catch (e: Exception) {
+                        Log.e("ARDebug", "Failed to start recording", e)
+                    }
+                }
 
-                // 3. Create the Sphere
                 val sphere = SphereNode(
                     engine = engine,
                     radius = 0.05f, // 5cm radius = 10cm diameter

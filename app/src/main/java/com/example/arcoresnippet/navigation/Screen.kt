@@ -3,14 +3,17 @@ package com.example.arcoresnippet.navigation
 import kotlinx.serialization.Serializable
 
 @Serializable
-sealed class Screen(val route: String) {
+sealed class Screen() {
 
     @Serializable
-    data object ARCore : Screen(route = "arCore")
+    data class ARCore(val recordingPath: String? = null) : Screen()
 
     @Serializable
-    data object Map : Screen(route = "map")
+    data object Map : Screen()
 
     @Serializable
-    data object Welcome : Screen(route = "welcome")
+    data object Source : Screen()
+
+    @Serializable
+    data object Welcome : Screen()
 }
