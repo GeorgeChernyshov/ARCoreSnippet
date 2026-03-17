@@ -106,9 +106,9 @@ fun ARCoreScreenContent(
             }
 
             config.focusMode = Config.FocusMode.FIXED
-            config.depthMode = Config.DepthMode.DISABLED
+            config.depthMode = Config.DepthMode.AUTOMATIC
             config.instantPlacementMode = Config.InstantPlacementMode.DISABLED
-            config.lightEstimationMode = Config.LightEstimationMode.DISABLED
+            config.lightEstimationMode = Config.LightEstimationMode.ENVIRONMENTAL_HDR
         },
         childNodes = nodes,
         onSessionUpdated = { session, frame ->
