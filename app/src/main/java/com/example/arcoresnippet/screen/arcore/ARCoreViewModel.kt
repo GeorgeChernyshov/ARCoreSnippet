@@ -35,4 +35,16 @@ class ARCoreViewModel @Inject constructor(
             fileUri = uriString.toFileUri()
         )
     }
+
+    fun showMapsBottomSheet() = viewModelScope.launch {
+        _uiState.value = _uiState.value.copy(
+            mapsBottomSheetShown = true
+        )
+    }
+
+    fun hideMapsBottomSheet() = viewModelScope.launch {
+        _uiState.value = _uiState.value.copy(
+            mapsBottomSheetShown = false
+        )
+    }
 }

@@ -4,7 +4,9 @@ arSceneView = "2.3.3"
 kotlin = "2.2.0"
 compose-plugin = "1.8.2"
 activityCompose = "1.10.1"
+mapsCompose = "8.2.1"
 playServicesLocation = "21.3.0"
+playServicesMaps = "20.0.0"
 pre36ActivityCompose = "1.10.0"
 navigationCompose = "2.9.3"
 kotlinxSerializationJson = "1.9.0"
@@ -38,7 +40,13 @@ arSceneView = { module = "io.github.sceneview:arsceneview", version.ref = "arSce
 hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "hilt" }
 hilt-compiler = { module = "com.google.dagger:hilt-compiler", version.ref = "hilt" }
 hilt-navigation-compose = { module = "androidx.hilt:hilt-navigation-compose", version.ref = "hiltNavigationCompose" }
+
+#maps
+maps-compose = { module = "com.google.maps.android:maps-compose", version.ref = "mapsCompose" }
+
+#play-services
 play-services-location = { module = "com.google.android.gms:play-services-location", version.ref = "playServicesLocation" }
+play-services-maps = { module = "com.google.android.gms:play-services-maps", version.ref = "playServicesMaps" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

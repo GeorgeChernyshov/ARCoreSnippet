@@ -69,10 +69,16 @@ dependencies {
     //ARCore
     implementation(libs.arCore)
     implementation(libs.arSceneView)
-    implementation(libs.play.services.location)
 
     //hilt
     implementation(libs.hilt.android)
     implementation(libs.hilt.navigation.compose)
     ksp(libs.hilt.compiler)
+
+    //maps
+    implementation(libs.maps.compose)
+
+    //play services
+    implementation(libs.play.services.maps)
+    implementation(libs.play.services.location)
 }
