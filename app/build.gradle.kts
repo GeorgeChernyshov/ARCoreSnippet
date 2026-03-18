@@ -30,8 +30,11 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        val apiKey = properties.getProperty("ARCORE_API_KEY") ?: ""
-        manifestPlaceholders["ARCORE_API_KEY"] = apiKey
+        val arCoreApiKey = properties.getProperty("ARCORE_API_KEY") ?: ""
+        manifestPlaceholders["ARCORE_API_KEY"] = arCoreApiKey
+
+        val mapApiKey = properties.getProperty("MAPS_API_KEY") ?: ""
+        manifestPlaceholders["MAPS_API_KEY"] = mapApiKey
     }
 
     buildTypes {

@@ -36,13 +36,13 @@ class ARCoreViewModel @Inject constructor(
         )
     }
 
-    fun showMapsBottomSheet() = viewModelScope.launch {
+    fun showMapBottomSheet() = viewModelScope.launch {
         _uiState.value = _uiState.value.copy(
             mapsBottomSheetShown = true
         )
     }
 
-    fun hideMapsBottomSheet() = viewModelScope.launch {
+    fun hideMapBottomSheet() = viewModelScope.launch {
         _uiState.value = _uiState.value.copy(
             mapsBottomSheetShown = false
         )

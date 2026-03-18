@@ -1,49 +1,72 @@
 package com.example.arcoresnippet.screen.arcore
 
-import android.content.Context
 import android.net.Uri
 import android.util.Log
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Icon
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.lifecycle.LifecycleCoroutineScope
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import com.example.arcoresnippet.R
-import com.google.ar.core.Anchor
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.LatLng
+import com.google.ar.core.Anchor.TerrainAnchorState
 import com.google.ar.core.CameraConfig
 import com.google.ar.core.CameraConfigFilter
 import com.google.ar.core.Config
 import com.google.ar.core.Earth
 import com.google.ar.core.Frame
 import com.google.ar.core.Pose
-import com.google.ar.core.RecordingConfig
 import com.google.ar.core.RecordingStatus
 import com.google.ar.core.TrackingState
 import com.google.ar.sceneform.rendering.ViewAttachmentManager
-import io.github.sceneview.ar.ARScene
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.MapProperties
+import com.google.maps.android.compose.MapType
+import com.google.maps.android.compose.MapUiSettings
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.rememberCameraPositionState
 import io.github.sceneview.ar.ARSceneView
+import io.github.sceneview.ar.arcore.distanceTo
+import io.github.sceneview.ar.arcore.position
 import io.github.sceneview.ar.node.AnchorNode
-import io.github.sceneview.math.Position
 import io.github.sceneview.math.Rotation
-import io.github.sceneview.node.ModelNode
 import io.github.sceneview.node.Node
 import io.github.sceneview.node.SphereNode
 import io.github.sceneview.node.ViewNode
@@ -52,11 +75,10 @@ import io.github.sceneview.rememberEngine
 import io.github.sceneview.rememberMaterialLoader
 import io.github.sceneview.rememberModelLoader
 import io.github.sceneview.rememberNodes
-import kotlinx.coroutines.launch
 import java.io.File
 import java.util.EnumSet
-import kotlin.math.log
 import kotlin.math.sqrt
+import kotlin.random.Random
 
 @Composable
 fun ARCoreScreen(recordingPath: String?) {
@@ -74,7 +96,10 @@ fun ARCoreScreen(recordingPath: String?) {
     uiState.fileUri?.let {
         ARCoreScreenContent(
             recorderState = uiState.recorderState,
-            fileUri = it
+            fileUri = it,
+            isMapBottomSheetShown = uiState.mapsBottomSheetShown,
+            showMapBottomSheet = viewModel::showMapBottomSheet,
+            hideMapBottomSheet = viewModel::hideMapBottomSheet
         )
     }
 }
@@ -83,6 +108,9 @@ fun ARCoreScreen(recordingPath: String?) {
 fun ARCoreScreenContent(
     recorderState: ARCoreRecorderState,
     fileUri: Uri,
+    isMapBottomSheetShown: Boolean,
+    showMapBottomSheet: () -> Unit,
+    hideMapBottomSheet: () -> Unit
 ) {
     val context = LocalContext.current
 
@@ -94,6 +122,17 @@ fun ARCoreScreenContent(
     var spherePlaced by remember { mutableStateOf(false) }
     val viewWindowManager = remember { ViewNode2.WindowManager(context) }
     val lifecycleScope = LocalLifecycleOwner.current.lifecycleScope
+
+    var markerAnchorNode by remember { mutableStateOf<AnchorNode?>(null) }
+    var trackingStatus by remember { mutableStateOf("Not Tracking") }
+    var localDistanceX by remember { mutableFloatStateOf(0f) }
+    var localDistanceY by remember { mutableFloatStateOf(0f) }
+    var localDistanceZ by remember { mutableFloatStateOf(0f) }
+    var earthDistanceX by remember { mutableDoubleStateOf(0.0) }
+    var earthDistanceY by remember { mutableDoubleStateOf(0.0) }
+    var earthDistanceZ by remember { mutableDoubleStateOf(0.0) }
+    var groundAltitude by remember { mutableDoubleStateOf(0.0) }
+
 
     val sphereNode = remember {
         SphereNode(
@@ -110,7 +149,7 @@ fun ARCoreScreenContent(
 
     LaunchedEffect(sceneView) {
         sceneView?.let {
-            viewNode = ViewNode(
+            val node = ViewNode(
                 engine = engine,
                 modelLoader = modelLoader,
                 viewAttachmentManager = ViewAttachmentManager(
@@ -119,8 +158,11 @@ fun ARCoreScreenContent(
                 ).apply { onResume() }
             ).apply {
                 loadView(context, R.layout.view_location)
-                rotation = Rotation(x = 0f, y = 0f, z = 90f)
+//                rotation = Rotation(x = 0f, y = 0f, z = 90f)
+//                setScale(100f)
             }
+
+            viewNode = node
         }
     }
 
@@ -134,121 +176,247 @@ fun ARCoreScreenContent(
         }
     }
 
-    AndroidView(
-        modifier = Modifier.fillMaxSize(),
-        factory = { context ->
-            sceneView = ARSceneView(
-                context = context,
-                sharedEngine = engine,
-                sharedModelLoader = modelLoader,
-                sharedMaterialLoader = materialLoader,
-            ).apply {
-                this.sessionConfiguration = { session, config ->
-                    if (recorderState == ARCoreRecorderState.PLAYBACK) {
-                        val file = File(fileUri.path ?: "")
-                        if (file.exists() && file.length() > 0) {
-                            try {
-                                session.setPlaybackDatasetUri(fileUri)
-                                config.geospatialMode = Config.GeospatialMode.DISABLED
-                                config.updateMode = Config.UpdateMode.BLOCKING
+    Box(Modifier.fillMaxSize()) {
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { context ->
+                sceneView = ARSceneView(
+                    context = context,
+                    sharedEngine = engine,
+                    sharedModelLoader = modelLoader,
+                    sharedMaterialLoader = materialLoader,
+                ).apply {
+                    this.sessionConfiguration = { session, config ->
+                        if (recorderState == ARCoreRecorderState.PLAYBACK) {
+                            val file = File(fileUri.path ?: "")
+                            if (file.exists() && file.length() > 0) {
+                                try {
+                                    session.setPlaybackDatasetUri(fileUri)
+                                    config.geospatialMode = Config.GeospatialMode.DISABLED
+                                    config.updateMode = Config.UpdateMode.BLOCKING
 
-                                Log.d("ARDebug", "Playback Configured: ${file.length()} bytes")
-                            } catch (e: Exception) {
-                                Log.e("ARDebug", "Playback setup failed", e)
+                                    Log.d("ARDebug", "Playback Configured: ${file.length()} bytes")
+                                } catch (e: Exception) {
+                                    Log.e("ARDebug", "Playback setup failed", e)
+                                }
                             }
-                        }
-                    } else {
-                        val filter = CameraConfigFilter(session).apply {
-                            setTargetFps(EnumSet.of(CameraConfig.TargetFps.TARGET_FPS_30))
-                        }
-                        session.getSupportedCameraConfigs(filter).firstOrNull()?.let {
-                            session.cameraConfig = it
+                        } else {
+                            val filter = CameraConfigFilter(session).apply {
+                                setTargetFps(EnumSet.of(CameraConfig.TargetFps.TARGET_FPS_30))
+                            }
+                            session.getSupportedCameraConfigs(filter).firstOrNull()?.let {
+                                session.cameraConfig = it
+                            }
+
+                            config.geospatialMode = Config.GeospatialMode.ENABLED
+                            config.updateMode = Config.UpdateMode.LATEST_CAMERA_IMAGE
                         }
 
-                        config.geospatialMode = Config.GeospatialMode.ENABLED
-                        config.updateMode = Config.UpdateMode.LATEST_CAMERA_IMAGE
+                        config.focusMode = Config.FocusMode.FIXED
+                        config.depthMode = Config.DepthMode.AUTOMATIC
+                        config.instantPlacementMode = Config.InstantPlacementMode.DISABLED
+                        config.lightEstimationMode = Config.LightEstimationMode.ENVIRONMENTAL_HDR
                     }
 
-                    config.focusMode = Config.FocusMode.FIXED
-                    config.depthMode = Config.DepthMode.AUTOMATIC
-                    config.instantPlacementMode = Config.InstantPlacementMode.DISABLED
-                    config.lightEstimationMode = Config.LightEstimationMode.ENVIRONMENTAL_HDR
-                }
+                    this.onSessionUpdated = { session, frame ->
+                        val earth = session.earth
+//                        if (!spherePlaced && frame.camera.trackingState == TrackingState.TRACKING) {
+//                            if (recorderState == ARCoreRecorderState.RECORDING &&
+//                                session.recordingStatus == RecordingStatus.NONE
+//                            ) {
+////                            try {
+////                                val recordingConfig = RecordingConfig(session)
+////                                    .setMp4DatasetUri(fileUri)
+////                                    .setAutoStopOnPause(true)
+////                                session.startRecording(recordingConfig)
+////                                Log.d("ARDebug", "Recording started to: $fileUri")
+////                            } catch (e: Exception) {
+////                                Log.e("ARDebug", "Failed to start recording", e)
+////                            }
+//                            }
+//
+//                            val cameraPose = frame.camera.pose
+//                            val targetPose = cameraPose.compose(
+//                                Pose.makeTranslation(0f, 0f, -2f)
+//                            )
+//                            val anchor = session.createAnchor(targetPose)
+//                            val anchorNode = AnchorNode(
+//                                engine = engine,
+//                                anchor = anchor
+//                            ).apply {
+//                                addChildNode(sphereNode)
+//                            }
+//
+//                            this.addChildNode(anchorNode)
+//                            spherePlaced = true
+//                        }
 
-                this.onSessionUpdated = { session, frame ->
-                    val earth = session.earth
-                    if (!spherePlaced && frame.camera.trackingState == TrackingState.TRACKING) {
-                        if (recorderState == ARCoreRecorderState.RECORDING &&
-                            session.recordingStatus == RecordingStatus.NONE
+                        val destLat = 40.206371
+                        val destLng = 44.500810
+
+                        if (
+                            !setMarkerPlaced && earth != null &&
+                            earth.trackingState == TrackingState.TRACKING &&
+                            viewNode != null
                         ) {
-                            try {
-                                val recordingConfig = RecordingConfig(session)
-                                    .setMp4DatasetUri(fileUri)
-                                    .setAutoStopOnPause(true)
-                                session.startRecording(recordingConfig)
-                                Log.d("ARDebug", "Recording started to: $fileUri")
-                            } catch (e: Exception) {
-                                Log.e("ARDebug", "Failed to start recording", e)
+                            earth.resolveAnchorOnTerrainAsync(
+                                destLat,
+                                destLng,
+                                0.5,
+                                0f, 0f, 0f, 1f
+                            ) { earthAnchor, state ->
+                                if (state == TerrainAnchorState.SUCCESS) {
+                                    val anchorNode = AnchorNode(engine, earthAnchor).apply {
+                                        addChildNode(viewNode!!)
+                                    }
+                                    nodes.add(anchorNode)
+                                    markerAnchorNode = anchorNode
+                                    setMarkerPlaced = true
+                                    val anchorGeoPose = earth.getGeospatialPose(earthAnchor.pose)
+                                    groundAltitude = anchorGeoPose.altitude
+                                    Log.d("ARDebug", "Geospatial Marker Placed at $destLat, $destLng")
+                                } else {
+                                    Log.e("ARDebug", "Terrain Anchor failed: $state")
+                                }
                             }
                         }
 
-                        val cameraPose = frame.camera.pose
-                        val targetPose = cameraPose.compose(
-                            Pose.makeTranslation(0f, 0f, -0.2f)
-                        )
-                        val anchor = session.createAnchor(targetPose)
-                        val anchorNode = AnchorNode(
-                            engine = engine,
-                            anchor = anchor
-                        ).apply {
-                            addChildNode(sphereNode)
-                        }
+                        if (setMarkerPlaced)
+                            viewNode?.lookAt(frame.camera.pose.position)
 
-                        this.addChildNode(anchorNode)
-                        spherePlaced = true
-                    }
-
-                    if (!setMarkerPlaced && earth != null && earth.trackingState == TrackingState.TRACKING) {
-                        val altitude = earth.cameraGeospatialPose.altitude - 1.5
-
-                        val destLat = 40.2060241
-                        val destLng = 44.4997323
-
-                        val earthAnchor = earth.createAnchor(
-                            destLat,
-                            destLng,
-                            altitude,
-                            0f, 0f, 0f, 1f
+                        tryLog(
+                            lastLogTime = lastLogTime,
+                            frame = frame,
+                            earth = earth,
+                            nodes = nodes,
+                            setLastLogTime = {
+                                lastLogTime = it
+                            }
                         )
 
-                        // 4. Wrap it in an AnchorNode and add to scene
-                        val anchorNode = AnchorNode(engine, earthAnchor).apply {
-                            addChildNode(viewNode!!)
-                        }
+                        markerAnchorNode?.let { anchor ->
+                            trackingStatus = if (anchor.trackingState == TrackingState.TRACKING)
+                                "Tracking"
+                            else "Lost Tracking"
 
-                        nodes.add(anchorNode)
-                        setMarkerPlaced = true
-                        Log.d("ARDebug", "Geospatial Marker Placed at $destLat, $destLng")
+                            val cameraPose = frame.camera.pose
+                            val anchorPose = anchor.pose
+
+                            localDistanceX = anchorPose.tx() - cameraPose.tx()
+                            localDistanceY = anchorPose.ty() - cameraPose.ty()
+                            localDistanceZ = anchorPose.tz() - cameraPose.tz()
+
+                            val cameraGeo = earth?.cameraGeospatialPose
+
+                            earthDistanceX = (destLat - (cameraGeo?.latitude ?: 0.0)) * 111111 // meters
+                            earthDistanceY = (destLng - (cameraGeo?.longitude ?: 0.0)) * 111111 // meters
+                            earthDistanceZ = (groundAltitude - (cameraGeo?.altitude ?: 0.0))
+                        }
                     }
-
-                    tryLog(
-                        lastLogTime = lastLogTime,
-                        frame = frame,
-                        earth = earth,
-                        nodes = nodes,
-                        setLastLogTime = {
-                            lastLogTime = it
-                        }
-                    )
                 }
-            }
 
-            sceneView!!
-        },
+                sceneView!!
+            },
 //        update = {
 //            it.childNodes = nodes
 //        }
-    )
+        )
+
+        Column(
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth()
+                .align(Alignment.TopCenter)
+        ) {
+            Text("TRACKING")
+            Text(trackingStatus)
+            Spacer(Modifier.height(16.dp))
+            Text("LOCAL")
+            Text(localDistanceX.toString())
+            Text(localDistanceY.toString())
+            Text(localDistanceZ.toString())
+            Spacer(Modifier.height(16.dp))
+            Text("EARTH")
+            Text(earthDistanceX.toString())
+            Text(earthDistanceY.toString())
+            Text(earthDistanceZ.toString())
+        }
+
+        Button(
+            onClick = showMapBottomSheet,
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(32.dp)
+                .align(Alignment.BottomCenter)
+        ) {
+            Text("Map")
+        }
+
+        AnimatedVisibility(
+            visible = isMapBottomSheetShown,
+            enter = slideInVertically(initialOffsetY = { it }),
+            exit = slideOutVertically(targetOffsetY = { it }),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.4f),
+                shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 8.dp
+            ) {
+                Column {
+                    // Grab handle
+                    Box(
+                        Modifier
+                            .padding(8.dp)
+                            .width(40.dp)
+                            .height(4.dp)
+                            .background(
+                                color = Color.Gray,
+                                shape = RoundedCornerShape(2.dp)
+                            )
+                            .align(Alignment.CenterHorizontally)
+                            .clickable { hideMapBottomSheet() }
+                    )
+
+                    // The actual Map
+                    SimpleMapView()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SimpleMapView() {
+    // Starting position (Yerevan)
+    val yerevan = LatLng(40.206371, 44.500810)
+    val cameraPositionState = rememberCameraPositionState {
+        position = CameraPosition.fromLatLngZoom(yerevan, 15f)
+    }
+
+    GoogleMap(
+        modifier = Modifier.fillMaxSize(),
+        cameraPositionState = cameraPositionState,
+        properties = MapProperties(
+            isMyLocationEnabled = false, // Set false to avoid location conflicts with ARCore
+            mapType = MapType.NORMAL
+        ),
+        uiSettings = MapUiSettings(
+            zoomControlsEnabled = true,
+            myLocationButtonEnabled = false
+        )
+    ) {
+        // Destination Marker (The 2D version of our AR droplet)
+        Marker(
+            state = MarkerState(position = yerevan),
+            title = "Destination",
+            snippet = "Marker in AR"
+        )
+    }
 }
 
 fun tryLog(
