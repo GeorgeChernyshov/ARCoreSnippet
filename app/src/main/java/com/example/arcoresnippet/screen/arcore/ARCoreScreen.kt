@@ -132,6 +132,7 @@ fun ARCoreScreenContent(
     var earthDistanceY by remember { mutableDoubleStateOf(0.0) }
     var earthDistanceZ by remember { mutableDoubleStateOf(0.0) }
     var groundAltitude by remember { mutableDoubleStateOf(0.0) }
+    var hAcc by remember { mutableDoubleStateOf(0.0) }
 
 
     val sphereNode = remember {
@@ -257,7 +258,9 @@ fun ARCoreScreenContent(
                         if (
                             !setMarkerPlaced && earth != null &&
                             earth.trackingState == TrackingState.TRACKING &&
-                            viewNode != null
+                            viewNode != null &&
+                            earth.cameraGeospatialPose.horizontalAccuracy < 10
+//                            earth.cameraGeospatialPose.verticalAccuracy < 5
                         ) {
                             earth.resolveAnchorOnTerrainAsync(
                                 destLat,
@@ -269,7 +272,7 @@ fun ARCoreScreenContent(
                                     val anchorNode = AnchorNode(engine, earthAnchor).apply {
                                         addChildNode(viewNode!!)
                                     }
-                                    nodes.add(anchorNode)
+                                    this.addChildNode(anchorNode)
                                     markerAnchorNode = anchorNode
                                     setMarkerPlaced = true
                                     val anchorGeoPose = earth.getGeospatialPose(earthAnchor.pose)
@@ -301,10 +304,13 @@ fun ARCoreScreenContent(
 
                             val cameraPose = frame.camera.pose
                             val anchorPose = anchor.pose
+                            val inverseCameraPose = cameraPose.inverse()
+                            val relativePose = inverseCameraPose.compose(anchorPose)
+                            val t = relativePose.translation
 
-                            localDistanceX = anchorPose.tx() - cameraPose.tx()
-                            localDistanceY = anchorPose.ty() - cameraPose.ty()
-                            localDistanceZ = anchorPose.tz() - cameraPose.tz()
+                            localDistanceX = t[1]
+                            localDistanceY = t[0]
+                            localDistanceZ = t[2]
 
                             val cameraGeo = earth?.cameraGeospatialPose
 
@@ -312,6 +318,8 @@ fun ARCoreScreenContent(
                             earthDistanceY = (destLng - (cameraGeo?.longitude ?: 0.0)) * 111111 // meters
                             earthDistanceZ = (groundAltitude - (cameraGeo?.altitude ?: 0.0))
                         }
+
+                        hAcc = earth?.cameraGeospatialPose?.horizontalAccuracy ?: 0.0
                     }
                 }
 
@@ -328,6 +336,9 @@ fun ARCoreScreenContent(
                 .fillMaxWidth()
                 .align(Alignment.TopCenter)
         ) {
+            Text("HORIZONTAL ACCURACY")
+            Text(hAcc.toString())
+            Spacer(Modifier.height(16.dp))
             Text("TRACKING")
             Text(trackingStatus)
             Spacer(Modifier.height(16.dp))
