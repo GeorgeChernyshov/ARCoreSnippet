@@ -32,17 +32,20 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import com.example.arcoresnippet.R
+import com.example.arcoresnippet.theme.ARCoreSnippetTheme
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.ar.core.Anchor.TerrainAnchorState
@@ -77,6 +80,7 @@ import io.github.sceneview.rememberModelLoader
 import io.github.sceneview.rememberNodes
 import java.io.File
 import java.util.EnumSet
+import kotlin.collections.remove
 import kotlin.math.sqrt
 import kotlin.random.Random
 
@@ -97,9 +101,11 @@ fun ARCoreScreen(recordingPath: String?) {
         ARCoreScreenContent(
             recorderState = uiState.recorderState,
             fileUri = it,
+            currentDestination = uiState.destination,
             isMapBottomSheetShown = uiState.mapsBottomSheetShown,
             showMapBottomSheet = viewModel::showMapBottomSheet,
-            hideMapBottomSheet = viewModel::hideMapBottomSheet
+            hideMapBottomSheet = viewModel::hideMapBottomSheet,
+            setDestination = viewModel::setDestination
         )
     }
 }
@@ -108,9 +114,11 @@ fun ARCoreScreen(recordingPath: String?) {
 fun ARCoreScreenContent(
     recorderState: ARCoreRecorderState,
     fileUri: Uri,
+    currentDestination: LatLng?,
     isMapBottomSheetShown: Boolean,
     showMapBottomSheet: () -> Unit,
-    hideMapBottomSheet: () -> Unit
+    hideMapBottomSheet: () -> Unit,
+    setDestination: (LatLng) -> Unit
 ) {
     val context = LocalContext.current
 
@@ -133,6 +141,7 @@ fun ARCoreScreenContent(
     var earthDistanceZ by remember { mutableDoubleStateOf(0.0) }
     var groundAltitude by remember { mutableDoubleStateOf(0.0) }
     var hAcc by remember { mutableDoubleStateOf(0.0) }
+    val currentDestinationState by rememberUpdatedState(currentDestination)
 
 
     val sphereNode = remember {
@@ -143,8 +152,7 @@ fun ARCoreScreenContent(
         )
     }
 
-    var setMarkerPlaced by remember { mutableStateOf(false) }
-
+    var earth by remember { mutableStateOf<Earth?>(null) }
     var sceneView by remember { mutableStateOf<ARSceneView?>(null) }
     var viewNode by remember { mutableStateOf<ViewNode?>(null) }
 
@@ -165,6 +173,19 @@ fun ARCoreScreenContent(
 
             viewNode = node
         }
+    }
+
+    LaunchedEffect(currentDestination) {
+        replaceMarker(
+            sceneView = sceneView ?: return@LaunchedEffect,
+            earth = earth ?: return@LaunchedEffect,
+            destLat = currentDestination?.latitude ?: 0.0,
+            destLng = currentDestination?.longitude ?: 0.0,
+            markerViewNode = viewNode ?: return@LaunchedEffect,
+            markerAnchorNode = markerAnchorNode,
+            setMarkerAnchorNode = { markerAnchorNode = it },
+            setGroundAltitude = { groundAltitude = it }
+        )
     }
 
     DisposableEffect(Unit) {
@@ -220,7 +241,9 @@ fun ARCoreScreenContent(
                     }
 
                     this.onSessionUpdated = { session, frame ->
-                        val earth = session.earth
+                        if (session.earth != earth)
+                            earth = session.earth
+
 //                        if (!spherePlaced && frame.camera.trackingState == TrackingState.TRACKING) {
 //                            if (recorderState == ARCoreRecorderState.RECORDING &&
 //                                session.recordingStatus == RecordingStatus.NONE
@@ -251,40 +274,24 @@ fun ARCoreScreenContent(
 //                            this.addChildNode(anchorNode)
 //                            spherePlaced = true
 //                        }
-
-                        val destLat = 40.206371
-                        val destLng = 44.500810
-
                         if (
-                            !setMarkerPlaced && earth != null &&
-                            earth.trackingState == TrackingState.TRACKING &&
-                            viewNode != null &&
-                            earth.cameraGeospatialPose.horizontalAccuracy < 10
-//                            earth.cameraGeospatialPose.verticalAccuracy < 5
+                            currentDestinationState == null &&
+                            earth != null &&
+                            earth!!.trackingState == TrackingState.TRACKING &&
+                            viewNode != null
                         ) {
-                            earth.resolveAnchorOnTerrainAsync(
-                                destLat,
-                                destLng,
-                                0.5,
-                                0f, 0f, 0f, 1f
-                            ) { earthAnchor, state ->
-                                if (state == TerrainAnchorState.SUCCESS) {
-                                    val anchorNode = AnchorNode(engine, earthAnchor).apply {
-                                        addChildNode(viewNode!!)
-                                    }
-                                    this.addChildNode(anchorNode)
-                                    markerAnchorNode = anchorNode
-                                    setMarkerPlaced = true
-                                    val anchorGeoPose = earth.getGeospatialPose(earthAnchor.pose)
-                                    groundAltitude = anchorGeoPose.altitude
-                                    Log.d("ARDebug", "Geospatial Marker Placed at $destLat, $destLng")
-                                } else {
-                                    Log.e("ARDebug", "Terrain Anchor failed: $state")
-                                }
-                            }
+                            val cameraGeo = earth!!.cameraGeospatialPose
+
+                            setDestination(
+                                LatLng(
+                                    cameraGeo.latitude,
+                                    cameraGeo.longitude
+                                )
+                            )
                         }
 
-                        if (setMarkerPlaced)
+                        // Anchor successfully put so we can safely use the view node
+                        if (markerAnchorNode != null)
                             viewNode?.lookAt(frame.camera.pose.position)
 
                         tryLog(
@@ -313,6 +320,8 @@ fun ARCoreScreenContent(
                             localDistanceZ = t[2]
 
                             val cameraGeo = earth?.cameraGeospatialPose
+                            val destLat = currentDestinationState?.latitude ?: 0.0
+                            val destLng = currentDestinationState?.longitude ?: 0.0
 
                             earthDistanceX = (destLat - (cameraGeo?.latitude ?: 0.0)) * 111111 // meters
                             earthDistanceY = (destLng - (cameraGeo?.longitude ?: 0.0)) * 111111 // meters
@@ -394,7 +403,10 @@ fun ARCoreScreenContent(
                     )
 
                     // The actual Map
-                    SimpleMapView()
+                    SimpleMapView(
+                        currentDestination = currentDestination,
+                        onLocationSelected = setDestination
+                    )
                 }
             }
         }
@@ -402,11 +414,16 @@ fun ARCoreScreenContent(
 }
 
 @Composable
-fun SimpleMapView() {
+fun SimpleMapView(
+    currentDestination: LatLng?,
+    onLocationSelected: (LatLng) -> Unit
+) {
     // Starting position (Yerevan)
-    val yerevan = LatLng(40.206371, 44.500810)
     val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(yerevan, 15f)
+        position = CameraPosition.fromLatLngZoom(
+            currentDestination ?: LatLng(0.0, 0.0),
+            15f
+        )
     }
 
     GoogleMap(
@@ -419,14 +436,83 @@ fun SimpleMapView() {
         uiSettings = MapUiSettings(
             zoomControlsEnabled = true,
             myLocationButtonEnabled = false
-        )
+        ),
+        onMapClick = onLocationSelected
     ) {
-        // Destination Marker (The 2D version of our AR droplet)
-        Marker(
-            state = MarkerState(position = yerevan),
-            title = "Destination",
-            snippet = "Marker in AR"
+        currentDestination?.let {
+            Marker(
+                state = MarkerState(position = it),
+                title = "Destination",
+                snippet = "Marker in AR"
+            )
+        }
+    }
+}
+
+@Composable
+@Preview
+fun SimpleMapViewPreview() {
+    ARCoreSnippetTheme {
+        SimpleMapView(
+            currentDestination = LatLng(0.0, 0.0),
+            onLocationSelected = {}
         )
+    }
+}
+
+@Composable
+@Preview
+fun ARCoreScreenContentPreview() {
+    ARCoreSnippetTheme {
+        ARCoreScreenContent(
+            recorderState = ARCoreRecorderState.INITIAL,
+            fileUri = Uri.EMPTY,
+            isMapBottomSheetShown = false,
+            currentDestination = LatLng(0.0, 0.0),
+            showMapBottomSheet = {},
+            hideMapBottomSheet = {},
+            setDestination = {}
+        )
+    }
+}
+
+fun replaceMarker(
+    sceneView: ARSceneView,
+    earth: Earth,
+    destLat: Double,
+    destLng: Double,
+    markerViewNode: ViewNode,
+    markerAnchorNode: AnchorNode?,
+    setMarkerAnchorNode: (AnchorNode) -> Unit,
+    setGroundAltitude: (Double) -> Unit
+) {
+    markerAnchorNode?.let {
+        sceneView.removeChildNode(it)
+        it.destroy()
+    }
+
+    earth.resolveAnchorOnTerrainAsync(
+        destLat,
+        destLng,
+        0.5,
+        0f, 0f, 0f, 1f
+    ) { earthAnchor, state ->
+        if (state == TerrainAnchorState.SUCCESS) {
+            val anchorNode = AnchorNode(
+                sceneView.engine,
+                earthAnchor
+            ).apply {
+                addChildNode(markerViewNode)
+            }
+
+            sceneView.addChildNode(anchorNode)
+            setMarkerAnchorNode(anchorNode)
+            val anchorGeoPose = earth.getGeospatialPose(earthAnchor.pose)
+            setGroundAltitude(anchorGeoPose.altitude)
+            Log.d("ARDebug", "Geospatial Marker Placed at $destLat, $destLng")
+        } else {
+            Log.e("ARDebug", "Terrain Anchor failed: $state")
+        }
     }
 }
 
