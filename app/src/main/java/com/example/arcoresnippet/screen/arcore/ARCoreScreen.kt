@@ -244,36 +244,37 @@ fun ARCoreScreenContent(
                         if (session.earth != earth)
                             earth = session.earth
 
-//                        if (!spherePlaced && frame.camera.trackingState == TrackingState.TRACKING) {
-//                            if (recorderState == ARCoreRecorderState.RECORDING &&
-//                                session.recordingStatus == RecordingStatus.NONE
-//                            ) {
-////                            try {
-////                                val recordingConfig = RecordingConfig(session)
-////                                    .setMp4DatasetUri(fileUri)
-////                                    .setAutoStopOnPause(true)
-////                                session.startRecording(recordingConfig)
-////                                Log.d("ARDebug", "Recording started to: $fileUri")
-////                            } catch (e: Exception) {
-////                                Log.e("ARDebug", "Failed to start recording", e)
-////                            }
+                        if (!spherePlaced && frame.camera.trackingState == TrackingState.TRACKING) {
+                            if (recorderState == ARCoreRecorderState.RECORDING &&
+                                session.recordingStatus == RecordingStatus.NONE
+                            ) {
+//                            try {
+//                                val recordingConfig = RecordingConfig(session)
+//                                    .setMp4DatasetUri(fileUri)
+//                                    .setAutoStopOnPause(true)
+//                                session.startRecording(recordingConfig)
+//                                Log.d("ARDebug", "Recording started to: $fileUri")
+//                            } catch (e: Exception) {
+//                                Log.e("ARDebug", "Failed to start recording", e)
 //                            }
-//
-//                            val cameraPose = frame.camera.pose
-//                            val targetPose = cameraPose.compose(
-//                                Pose.makeTranslation(0f, 0f, -2f)
-//                            )
-//                            val anchor = session.createAnchor(targetPose)
-//                            val anchorNode = AnchorNode(
-//                                engine = engine,
-//                                anchor = anchor
-//                            ).apply {
-//                                addChildNode(sphereNode)
-//                            }
-//
-//                            this.addChildNode(anchorNode)
-//                            spherePlaced = true
-//                        }
+                            }
+
+                            val cameraPose = frame.camera.pose
+                            val targetPose = cameraPose.compose(
+                                Pose.makeTranslation(0f, 0f, -0.2f)
+                            )
+                            val anchor = session.createAnchor(targetPose)
+                            val anchorNode = AnchorNode(
+                                engine = engine,
+                                anchor = anchor
+                            ).apply {
+                                addChildNode(sphereNode)
+                            }
+
+                            this.addChildNode(anchorNode)
+                            spherePlaced = true
+                        }
+                        
                         if (
                             currentDestinationState == null &&
                             earth != null &&
