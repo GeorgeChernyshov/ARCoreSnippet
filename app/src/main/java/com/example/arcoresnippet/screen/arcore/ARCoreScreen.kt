@@ -1,10 +1,12 @@
 package com.example.arcoresnippet.screen.arcore
 
 import android.net.Uri
+import android.opengl.Matrix
 import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -36,7 +38,15 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PaintingStyle.Companion.Stroke
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -49,6 +59,7 @@ import com.example.arcoresnippet.theme.ARCoreSnippetTheme
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.ar.core.Anchor.TerrainAnchorState
+import com.google.ar.core.Camera
 import com.google.ar.core.CameraConfig
 import com.google.ar.core.CameraConfigFilter
 import com.google.ar.core.Config
@@ -142,7 +153,7 @@ fun ARCoreScreenContent(
     var groundAltitude by remember { mutableDoubleStateOf(0.0) }
     var hAcc by remember { mutableDoubleStateOf(0.0) }
     val currentDestinationState by rememberUpdatedState(currentDestination)
-
+    var pathScreenPoints by remember { mutableStateOf<List<Offset>>(emptyList()) }
 
     val sphereNode = remember {
         SphereNode(
@@ -329,6 +340,30 @@ fun ARCoreScreenContent(
                             earthDistanceZ = (groundAltitude - (cameraGeo?.altitude ?: 0.0))
                         }
 
+                        markerAnchorNode?.let { anchorNode ->
+                            with(frame.camera) {
+                                val anchorPose = anchorNode.anchor.pose ?: return@let
+
+                                // 1. Get the screen dimensions from the sceneView
+                                // (Important to use the view size, not image resolution, for UI alignment)
+                                val screenWidth = sceneView?.width?.toFloat() ?: 0f
+                                val screenHeight = sceneView?.height?.toFloat() ?: 0f
+
+                                // 2. Project ONLY the Marker position to 2D
+                                val markerScreenCoord = project(
+                                    anchorPose,
+                                    this,
+                                    screenWidth,
+                                    screenHeight
+                                )
+
+                                pathScreenPoints = listOf(
+                                    Offset(screenWidth / 2f, screenHeight), // Point A: Bottom Center (Static)
+                                    Offset(markerScreenCoord.x, markerScreenCoord.y) // Point B: Marker (Projected)
+                                )
+                            }
+                        }
+
                         hAcc = earth?.cameraGeospatialPose?.horizontalAccuracy ?: 0.0
                     }
                 }
@@ -339,6 +374,29 @@ fun ARCoreScreenContent(
 //            it.childNodes = nodes
 //        }
         )
+
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            if (pathScreenPoints.size > 1) {
+                val path = Path().apply {
+                    moveTo(pathScreenPoints[0].x, pathScreenPoints[0].y)
+                    for (i in 1 until pathScreenPoints.size) {
+                        lineTo(pathScreenPoints[i].x, pathScreenPoints[i].y)
+                    }
+                }
+
+                drawPath(
+                    path = path,
+                    color = Color.Cyan.copy(alpha = 0.7f),
+                    style = Stroke(
+                        width = 12f,
+                        cap = StrokeCap.Round,
+                        join = StrokeJoin.Round,
+//                        // Optional: Make it dashed for a "navigation" look
+//                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(30f, 20f), 0f)
+                    )
+                )
+            }
+        }
 
         Column(
             modifier = Modifier
@@ -361,6 +419,9 @@ fun ARCoreScreenContent(
             Text(earthDistanceX.toString())
             Text(earthDistanceY.toString())
             Text(earthDistanceZ.toString())
+            Spacer(Modifier.height(16.dp))
+            Text("SCREEN_COORDINATES")
+            Text(pathScreenPoints.joinToString(", "))
         }
 
         Button(
@@ -571,4 +632,65 @@ fun tryLog(
         Log.d("ARDebug", logContent.toString())
         setLastLogTime(currentTime)
     }
+}
+
+fun project(
+    pose: Pose,
+    camera: Camera,
+    width: Float,
+    height: Float
+): Offset {
+    val projectionMatrix = FloatArray(16)
+    val viewMatrix = FloatArray(16)
+
+    // 1. Get the matrices from ARCore
+    camera.getProjectionMatrix(
+        projectionMatrix,
+        0,
+        0.1f,
+        100f
+    )
+
+    camera.getViewMatrix(viewMatrix, 0)
+
+    // 2. Compute the Model-View-Projection matrix
+    val mvpMatrix = FloatArray(16)
+    Matrix.multiplyMM(
+        mvpMatrix,
+        0,
+        projectionMatrix,
+        0,
+        viewMatrix,
+        0
+    )
+
+    // 3. Define the 3D point (world space)
+    val worldPoint = floatArrayOf(
+        pose.tx(),
+        pose.ty(),
+        pose.tz(),
+        1f
+    )
+
+    val clipSpacePoint = FloatArray(4)
+
+    // 4. Transform world point to Clip Space
+    Matrix.multiplyMV(
+        clipSpacePoint,
+        0,
+        mvpMatrix,
+        0,
+        worldPoint,
+        0
+    )
+
+    // 5. Normalize (Perspective Divide)
+    val ndcX = clipSpacePoint[0] / clipSpacePoint[3]
+    val ndcY = clipSpacePoint[1] / clipSpacePoint[3]
+
+    // 6. Convert Normalized Device Coordinates (-1 to 1) to Screen Pixels (0 to Width/Height)
+    val x = (ndcX + 1f) / 2f * width
+    val y = (1f - ndcY) / 2f * height
+
+    return Offset(x, y)
 }
