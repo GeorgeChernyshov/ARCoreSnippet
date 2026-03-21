@@ -1,4 +1,4 @@
-package com.example.arcoresnippet.theme
+package com.example.arcoresnippet.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle

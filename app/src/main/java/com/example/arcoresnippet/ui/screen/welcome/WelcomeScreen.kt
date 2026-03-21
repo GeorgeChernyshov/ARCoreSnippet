@@ -1,5 +1,6 @@
-package com.example.arcoresnippet.screen.welcome
+package com.example.arcoresnippet.ui.screen.welcome
 
+import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -22,10 +23,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import com.example.arcoresnippet.AppState
-import com.example.arcoresnippet.AppViewModel
+import com.example.arcoresnippet.ui.AppState
+import com.example.arcoresnippet.ui.AppViewModel
 import com.example.arcoresnippet.R
-import com.example.arcoresnippet.theme.ARCoreSnippetTheme
+import com.example.arcoresnippet.ui.theme.ARCoreSnippetTheme
 import com.google.ar.core.ArCoreApk
 
 @Composable
@@ -61,17 +62,17 @@ fun WelcomeScreen(onNextClick: () -> Unit) {
         appState = appState,
         grantCameraPermission = {
             cameraPermissionLauncher.launch(
-                android.Manifest.permission.CAMERA
+                Manifest.permission.CAMERA
             )
         },
         grantCoarseLocationPermission = {
             coarseLocationPermissionLauncher.launch(
-                android.Manifest.permission.ACCESS_COARSE_LOCATION
+                Manifest.permission.ACCESS_COARSE_LOCATION
             )
         },
         grantFineLocationPermission = {
             fineLocationPermissionLauncher.launch(
-                android.Manifest.permission.ACCESS_FINE_LOCATION
+                Manifest.permission.ACCESS_FINE_LOCATION
             )
         },
         onNextClick = onNextClick

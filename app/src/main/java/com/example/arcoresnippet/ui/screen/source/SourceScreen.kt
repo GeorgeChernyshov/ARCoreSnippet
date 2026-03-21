@@ -1,4 +1,4 @@
-package com.example.arcoresnippet.screen.source
+package com.example.arcoresnippet.ui.screen.source
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -26,8 +26,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.example.arcoresnippet.R
-import com.example.arcoresnippet.model.Recording
-import com.example.arcoresnippet.theme.ARCoreSnippetTheme
+import com.example.arcoresnippet.domain.model.Recording
+import com.example.arcoresnippet.ui.theme.ARCoreSnippetTheme
 
 @Composable
 fun SourceScreen(

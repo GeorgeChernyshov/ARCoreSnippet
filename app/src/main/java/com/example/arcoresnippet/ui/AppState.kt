@@ -1,4 +1,4 @@
-package com.example.arcoresnippet
+package com.example.arcoresnippet.ui
 
 data class AppState(
     val cameraPermissionGranted: Boolean = false,

@@ -1,4 +1,4 @@
-package com.example.arcoresnippet.screen.arcore
+package com.example.arcoresnippet.ui.screen.arcore
 
 enum class ARCoreRecorderState {
     INITIAL,

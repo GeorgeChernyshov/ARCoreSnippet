@@ -1,4 +1,4 @@
-package com.example.arcoresnippet.screen.arcore
+package com.example.arcoresnippet.ui.screen.arcore
 
 import android.net.Uri
 import com.google.android.gms.maps.model.LatLng

@@ -1,4 +1,4 @@
-package com.example.arcoresnippet
+package com.example.arcoresnippet.ui
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -8,12 +8,12 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
-import com.example.arcoresnippet.navigation.Screen
-import com.example.arcoresnippet.screen.arcore.ARCoreScreen
-import com.example.arcoresnippet.screen.maps.MapsScreen
-import com.example.arcoresnippet.screen.source.SourceScreen
-import com.example.arcoresnippet.screen.welcome.WelcomeScreen
-import com.example.arcoresnippet.theme.ARCoreSnippetTheme
+import com.example.arcoresnippet.ui.navigation.Screen
+import com.example.arcoresnippet.ui.screen.arcore.ARCoreScreen
+import com.example.arcoresnippet.ui.screen.maps.MapsScreen
+import com.example.arcoresnippet.ui.screen.source.SourceScreen
+import com.example.arcoresnippet.ui.screen.welcome.WelcomeScreen
+import com.example.arcoresnippet.ui.theme.ARCoreSnippetTheme
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint

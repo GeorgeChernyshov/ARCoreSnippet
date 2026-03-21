@@ -1,6 +1,6 @@
-package com.example.arcoresnippet.screen.source
+package com.example.arcoresnippet.ui.screen.source
 
-import com.example.arcoresnippet.model.Recording
+import com.example.arcoresnippet.domain.model.Recording
 
 data class SourceScreenState(
     val recordings: List<Recording> = emptyList(),

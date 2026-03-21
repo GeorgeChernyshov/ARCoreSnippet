@@ -1,4 +1,4 @@
-package com.example.arcoresnippet.theme
+package com.example.arcoresnippet.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

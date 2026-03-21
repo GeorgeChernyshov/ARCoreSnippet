@@ -1,17 +1,15 @@
-package com.example.arcoresnippet.screen.arcore
+package com.example.arcoresnippet.ui.screen.arcore
 
-import androidx.compose.animation.core.copy
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.arcoresnippet.repository.RecordingsRepository
-import com.example.arcoresnippet.toFileUri
+import com.example.arcoresnippet.domain.repository.RecordingsRepository
+import com.example.arcoresnippet.util.toFileUri
 import com.google.android.gms.maps.model.LatLng
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import kotlin.concurrent.atomics.update
 
 @HiltViewModel
 class ARCoreViewModel @Inject constructor(

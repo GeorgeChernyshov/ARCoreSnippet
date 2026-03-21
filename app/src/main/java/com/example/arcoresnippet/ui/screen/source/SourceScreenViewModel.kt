@@ -1,8 +1,8 @@
-package com.example.arcoresnippet.screen.source
+package com.example.arcoresnippet.ui.screen.source
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.arcoresnippet.repository.RecordingsRepository
+import com.example.arcoresnippet.domain.repository.RecordingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow

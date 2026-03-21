@@ -1,4 +1,4 @@
-package com.example.arcoresnippet
+package com.example.arcoresnippet.util
 
 import android.net.Uri
 import java.io.File

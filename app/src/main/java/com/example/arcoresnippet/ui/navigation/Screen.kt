@@ -1,4 +1,4 @@
-package com.example.arcoresnippet.navigation
+package com.example.arcoresnippet.ui.navigation
 
 import kotlinx.serialization.Serializable
 

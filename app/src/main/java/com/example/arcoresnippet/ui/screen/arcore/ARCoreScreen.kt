@@ -1,4 +1,4 @@
-package com.example.arcoresnippet.screen.arcore
+package com.example.arcoresnippet.ui.screen.arcore
 
 import android.net.Uri
 import android.opengl.Matrix
@@ -40,13 +40,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PaintingStyle.Companion.Stroke
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -55,7 +52,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import com.example.arcoresnippet.R
-import com.example.arcoresnippet.theme.ARCoreSnippetTheme
+import com.example.arcoresnippet.ui.theme.ARCoreSnippetTheme
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.ar.core.Anchor.TerrainAnchorState
@@ -77,10 +74,8 @@ import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
 import io.github.sceneview.ar.ARSceneView
-import io.github.sceneview.ar.arcore.distanceTo
 import io.github.sceneview.ar.arcore.position
 import io.github.sceneview.ar.node.AnchorNode
-import io.github.sceneview.math.Rotation
 import io.github.sceneview.node.Node
 import io.github.sceneview.node.SphereNode
 import io.github.sceneview.node.ViewNode
@@ -91,9 +86,7 @@ import io.github.sceneview.rememberModelLoader
 import io.github.sceneview.rememberNodes
 import java.io.File
 import java.util.EnumSet
-import kotlin.collections.remove
 import kotlin.math.sqrt
-import kotlin.random.Random
 
 @Composable
 fun ARCoreScreen(recordingPath: String?) {

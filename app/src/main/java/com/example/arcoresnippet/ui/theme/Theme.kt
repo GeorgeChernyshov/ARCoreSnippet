@@ -1,4 +1,4 @@
-package com.example.arcoresnippet.theme
+package com.example.arcoresnippet.ui.theme
 
 import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme

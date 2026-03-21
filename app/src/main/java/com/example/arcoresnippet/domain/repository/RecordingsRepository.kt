@@ -1,7 +1,7 @@
-package com.example.arcoresnippet.repository
+package com.example.arcoresnippet.domain.repository
 
 import android.content.Context
-import com.example.arcoresnippet.model.Recording
+import com.example.arcoresnippet.domain.model.Recording
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import javax.inject.Inject

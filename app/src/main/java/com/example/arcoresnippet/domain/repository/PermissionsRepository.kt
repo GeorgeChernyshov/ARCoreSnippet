@@ -1,4 +1,4 @@
-package com.example.arcoresnippet.repository
+package com.example.arcoresnippet.domain.repository
 
 import android.Manifest
 import android.content.Context

@@ -1,4 +1,4 @@
-package com.example.arcoresnippet.screen.maps
+package com.example.arcoresnippet.ui.screen.maps
 
 import androidx.compose.runtime.Composable
 

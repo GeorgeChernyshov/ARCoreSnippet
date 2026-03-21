@@ -1,8 +1,8 @@
-package com.example.arcoresnippet
+package com.example.arcoresnippet.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.arcoresnippet.repository.PermissionsRepository
+import com.example.arcoresnippet.domain.repository.PermissionsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
