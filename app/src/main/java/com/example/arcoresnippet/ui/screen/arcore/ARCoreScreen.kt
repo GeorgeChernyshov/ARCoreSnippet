@@ -34,6 +34,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -84,6 +85,9 @@ import io.github.sceneview.rememberEngine
 import io.github.sceneview.rememberMaterialLoader
 import io.github.sceneview.rememberModelLoader
 import io.github.sceneview.rememberNodes
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.io.File
 import java.util.EnumSet
 import kotlin.math.sqrt
@@ -106,10 +110,12 @@ fun ARCoreScreen(recordingPath: String?) {
             recorderState = uiState.recorderState,
             fileUri = it,
             currentDestination = uiState.destination,
+            currentPath = uiState.path,
             isMapBottomSheetShown = uiState.mapsBottomSheetShown,
             showMapBottomSheet = viewModel::showMapBottomSheet,
             hideMapBottomSheet = viewModel::hideMapBottomSheet,
-            setDestination = viewModel::setDestination
+            setDestination = viewModel::setDestination,
+            fetchPath = viewModel::fetchRoadPath
         )
     }
 }
@@ -119,21 +125,20 @@ fun ARCoreScreenContent(
     recorderState: ARCoreRecorderState,
     fileUri: Uri,
     currentDestination: LatLng?,
+    currentPath: List<LatLng>?,
     isMapBottomSheetShown: Boolean,
     showMapBottomSheet: () -> Unit,
     hideMapBottomSheet: () -> Unit,
-    setDestination: (LatLng) -> Unit
+    setDestination: (LatLng) -> Unit,
+    fetchPath: (LatLng, LatLng) -> Unit
 ) {
     val context = LocalContext.current
 
     val engine = rememberEngine()
     val modelLoader = rememberModelLoader(engine)
     val materialLoader = rememberMaterialLoader(engine)
-    val nodes = rememberNodes()
     var lastLogTime by remember { mutableLongStateOf(0L) }
     var spherePlaced by remember { mutableStateOf(false) }
-    val viewWindowManager = remember { ViewNode2.WindowManager(context) }
-    val lifecycleScope = LocalLifecycleOwner.current.lifecycleScope
 
     var markerAnchorNode by remember { mutableStateOf<AnchorNode?>(null) }
     var trackingStatus by remember { mutableStateOf("Not Tracking") }
@@ -146,7 +151,10 @@ fun ARCoreScreenContent(
     var groundAltitude by remember { mutableDoubleStateOf(0.0) }
     var hAcc by remember { mutableDoubleStateOf(0.0) }
     val currentDestinationState by rememberUpdatedState(currentDestination)
+    val currentPathState by rememberUpdatedState(currentPath)
     var pathScreenPoints by remember { mutableStateOf<List<Offset>>(emptyList()) }
+    val coroutineScope = rememberCoroutineScope()
+    var fetchPathJob by remember { mutableStateOf<Job?>(null) }
 
     val sphereNode = remember {
         SphereNode(
@@ -192,13 +200,20 @@ fun ARCoreScreenContent(
         )
     }
 
-    DisposableEffect(Unit) {
-        onDispose {
-            nodes.forEach { node ->
-                node.childNodes.forEach { it.destroy() }
+    DisposableEffect(currentDestination) {
+        fetchPathJob = coroutineScope.launch {
+            earth?.cameraGeospatialPose?.let {
+                val source = LatLng(it.latitude, it.longitude)
+                if (currentDestination != null)
+                    fetchPath(source, currentDestination)
             }
 
-            nodes.clear()
+            delay(30000)
+        }
+
+        onDispose {
+            fetchPathJob?.cancel()
+            fetchPathJob = null
         }
     }
 
@@ -299,16 +314,6 @@ fun ARCoreScreenContent(
                         if (markerAnchorNode != null)
                             viewNode?.lookAt(frame.camera.pose.position)
 
-                        tryLog(
-                            lastLogTime = lastLogTime,
-                            frame = frame,
-                            earth = earth,
-                            nodes = nodes,
-                            setLastLogTime = {
-                                lastLogTime = it
-                            }
-                        )
-
                         markerAnchorNode?.let { anchor ->
                             trackingStatus = if (anchor.trackingState == TrackingState.TRACKING)
                                 "Tracking"
@@ -342,6 +347,35 @@ fun ARCoreScreenContent(
                                 val screenWidth = sceneView?.width?.toFloat() ?: 0f
                                 val screenHeight = sceneView?.height?.toFloat() ?: 0f
 
+                                // 2. Start the line at the Bottom Center (your feet)
+                                val pointsOnScreen = mutableListOf<Offset>()
+                                pointsOnScreen.add(Offset(screenWidth / 2f, screenHeight))
+
+                                // 3. Project each coordinate in the path
+                                currentPathState?.forEach { latLng ->
+                                    try {
+                                        // Convert LatLng to a Pose.
+                                        // We use groundAltitude so the line stays on the floor.
+                                        val pointPose = earth!!.getPose(
+                                            latLng.latitude,
+                                            latLng.longitude,
+                                            groundAltitude,
+                                            0f, 0f, 0f, 1f // Orientation doesn't matter for a line point
+                                        )
+
+                                        val screenCoord = project(
+                                            pointPose,
+                                            this,
+                                            screenWidth,
+                                            screenHeight
+                                        )
+
+                                        pointsOnScreen.add(Offset(screenCoord.x, screenCoord.y))
+                                    } catch (e: Exception) {
+                                        // Geospatial poses can fail if the area isn't localized yet
+                                    }
+                                }
+
                                 // 2. Project ONLY the Marker position to 2D
                                 val markerScreenCoord = project(
                                     anchorPose,
@@ -350,10 +384,9 @@ fun ARCoreScreenContent(
                                     screenHeight
                                 )
 
-                                pathScreenPoints = listOf(
-                                    Offset(screenWidth / 2f, screenHeight), // Point A: Bottom Center (Static)
-                                    Offset(markerScreenCoord.x, markerScreenCoord.y) // Point B: Marker (Projected)
-                                )
+                                pointsOnScreen.add(Offset(markerScreenCoord.x, markerScreenCoord.y))
+
+                                pathScreenPoints = pointsOnScreen
                             }
                         }
 
@@ -524,9 +557,11 @@ fun ARCoreScreenContentPreview() {
             fileUri = Uri.EMPTY,
             isMapBottomSheetShown = false,
             currentDestination = LatLng(0.0, 0.0),
+            currentPath = null,
             showMapBottomSheet = {},
             hideMapBottomSheet = {},
-            setDestination = {}
+            setDestination = {},
+            fetchPath = { _, _ -> }
         )
     }
 }
@@ -568,62 +603,6 @@ fun replaceMarker(
         } else {
             Log.e("ARDebug", "Terrain Anchor failed: $state")
         }
-    }
-}
-
-fun tryLog(
-    lastLogTime: Long,
-    frame: Frame,
-    earth: Earth?,
-    nodes: List<Node>,
-    setLastLogTime: (Long) -> Unit
-) {
-    val currentTime = System.currentTimeMillis()
-    if (currentTime - lastLogTime >= 3000) {
-        val logContent = StringBuilder()
-        logContent.appendLine("--- 3s Update ---")
-
-        val earthState = earth?.earthState
-        val trackingState = earth?.trackingState
-        logContent.appendLine("Earth State: $earthState | Tracking State: $trackingState")
-        if (earth != null && earth.trackingState == TrackingState.TRACKING) {
-            val pose = earth.cameraGeospatialPose
-            logContent.append("GPS: ${"%.6f".format(pose.latitude)}, ")
-            logContent.append("${"%.6f".format(pose.longitude)} | ")
-            logContent.append("Acc: ${"%.1fm".format(pose.horizontalAccuracy)}")
-            logContent.appendLine()
-        }
-
-        nodes.filterIsInstance<AnchorNode>()
-            .forEach { node ->
-                logContent.appendLine("-- Anchor Node: ${node.position} --")
-                val anchor = node.anchor
-
-                if (anchor.trackingState == TrackingState.TRACKING) {
-                    val cameraPose = frame.camera.pose
-                    val anchorPose = anchor.pose
-
-                    // Math: Transform Anchor Pose into Camera-Local space
-                    val relativePose = cameraPose.inverse().compose(anchorPose)
-                    val t = relativePose.translation
-                    val distance = sqrt(t[0]*t[0] + t[1]*t[1] + t[2]*t[2])
-                    logContent.appendLine("Distance: ${"%.2f".format(distance)}m")
-                    logContent.append("Relative Pos: ")
-                    logContent.append("x=${"%.2f".format(t[0])}, ")
-                    logContent.append("y=${"%.2f".format(t[1])}, ")
-                    logContent.append("z=${"%.2f".format(t[2])}")
-                    logContent.appendLine()
-                    logContent.appendLine("Camera Tracking: ${frame.camera.trackingState}")
-                } else if (anchor.trackingState != TrackingState.TRACKING) {
-                    logContent.appendLine("Anchor Lost Tracking: ${anchor.trackingState}")
-                }
-
-                logContent.appendLine("-- End Node --")
-                logContent.appendLine()
-            }
-
-        Log.d("ARDebug", logContent.toString())
-        setLastLogTime(currentTime)
     }
 }
 

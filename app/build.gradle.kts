@@ -32,6 +32,7 @@ android {
 
         val arCoreApiKey = properties.getProperty("ARCORE_API_KEY") ?: ""
         manifestPlaceholders["ARCORE_API_KEY"] = arCoreApiKey
+        buildConfigField("String", "ARCORE_API_KEY", "\"$arCoreApiKey\"")
 
         val mapApiKey = properties.getProperty("MAPS_API_KEY") ?: ""
         manifestPlaceholders["MAPS_API_KEY"] = mapApiKey
@@ -55,6 +56,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     hilt {
         enableAggregatingTask = false
@@ -81,7 +83,15 @@ dependencies {
     //maps
     implementation(libs.maps.compose)
 
+    //moshi
+    implementation(libs.moshi.kotlin)
+    ksp(libs.moshi.kotlin.codegen)
+
     //play services
     implementation(libs.play.services.maps)
     implementation(libs.play.services.location)
+
+    //retrofit
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.converter.moshi)
 }

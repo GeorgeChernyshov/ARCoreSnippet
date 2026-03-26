@@ -7,5 +7,6 @@ data class ARCoreScreenState(
     val recorderState: ARCoreRecorderState = ARCoreRecorderState.INITIAL,
     val fileUri: Uri? = null,
     val destination: LatLng? = null,
+    val path: List<LatLng> = emptyList(),
     val mapsBottomSheetShown: Boolean = false
 )
