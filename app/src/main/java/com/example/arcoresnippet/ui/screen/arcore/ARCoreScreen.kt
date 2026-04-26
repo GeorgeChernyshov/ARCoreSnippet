@@ -1,6 +1,5 @@
 package com.example.arcoresnippet.ui.screen.arcore
 
-import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically

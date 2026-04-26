@@ -1,26 +1,62 @@
 package com.example.arcoresnippet.ui.screen.arcore
 
+import android.util.Log
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Card
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
+import com.example.arcoresnippet.R
 import com.google.android.gms.maps.model.LatLng
+import com.google.ar.core.Anchor
+import com.google.ar.core.CameraConfig
+import com.google.ar.core.CameraConfigFilter
+import com.google.ar.core.Config
+import com.google.ar.core.Earth
 import com.google.ar.core.Frame
 import com.google.ar.core.GeospatialPose
+import com.google.ar.core.Pose
+import com.google.ar.core.TrackingState
+import dev.romainguy.kotlin.math.Float3
+import io.github.sceneview.ar.ARSceneView
+import io.github.sceneview.ar.arcore.position
 import io.github.sceneview.ar.node.AnchorNode
+import io.github.sceneview.math.Position
+import io.github.sceneview.math.Rotation
+import io.github.sceneview.node.ViewNode
+import io.github.sceneview.rememberEngine
+import io.github.sceneview.rememberMaterialLoader
+import io.github.sceneview.rememberViewNodeManager
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import java.util.EnumSet
 
 @Composable
 fun ARScene(
@@ -30,7 +66,7 @@ fun ARScene(
     setDestination: (LatLng) -> Unit,
     onSourceLocationChanged: (LatLng) -> Unit,
     collectStats: (
-        anchor: AnchorNode,
+        anchor: Anchor,
         frame: Frame,
         cameraGeo: GeospatialPose,
         destLan: Double,
@@ -39,40 +75,198 @@ fun ARScene(
     ) -> Unit,
     setHorizontalAccuracy: (Double) -> Unit
 ) {
-    var sceneView by remember { mutableStateOf<ARSceneView?>(null) }
+    val engine = rememberEngine()
+    val materialLoader = rememberMaterialLoader(engine)
+    val windowManager = rememberViewNodeManager()
+        .apply { this.resume(LocalView.current) }
+
+    val markerNode = remember {
+        ViewNode(
+            engine = engine,
+            materialLoader = materialLoader,
+            windowManager = windowManager
+        ) {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_location),
+                contentDescription = null,
+                modifier = Modifier.size(2000.dp),
+                tint = Color.Cyan
+            )
+        }
+    }
+
+    val coroutineScope = rememberCoroutineScope()
+
+    // TODO add a check for complex path drawing possibility
+//    var sceneView by remember { mutableStateOf<ARSceneView?>(null) }
     val currentPathState by rememberUpdatedState(currentPath)
     var visibleSegments by remember { mutableStateOf<List<List<Offset>>>(emptyList()) }
 
+    var sphereAnchor by remember { mutableStateOf<Anchor?>(null) }
+    var markerAnchor by remember { mutableStateOf<Anchor?>(null) }
+    var groundAltitude by remember { mutableDoubleStateOf(0.0) }
+    var replaceMarker by remember { mutableStateOf(false) }
+    var locationTrackerJob by remember { mutableStateOf<Job?>(null) }
+    var sourceLocation by remember { mutableStateOf<Float3?>(null) }
+
+    DisposableEffect(currentDestination) {
+        replaceMarker = true
+        locationTrackerJob = coroutineScope.launch {
+            while (true) {
+                sourceLocation?.let {
+                    onSourceLocationChanged(
+                        LatLng(it.x.toDouble(), it.y.toDouble())
+                    )
+                }
+
+                delay(30000)
+            }
+        }
+
+        onDispose {
+            locationTrackerJob?.cancel()
+            locationTrackerJob = null
+        }
+    }
+
     Box(modifier) {
-        AndroidView(
-            modifier = Modifier.fillMaxSize(),
-            factory = { context ->
-                sceneView = ARSceneView(context).apply {
-                    this.onDestinationChanged = setDestination
-                    this.collectStats = collectStats
-                    this.setHorizontalAccuracy = setHorizontalAccuracy
-                    this.onSourceLocationChanged = onSourceLocationChanged
-                    this.afterSessionUpdated = {
-                        currentPathState?.let { path ->
-                            processPath(path = path)?.let {
-                                visibleSegments = assembleSegments(
-                                    startPoint = Offset(
-                                        width.toFloat() / 2f,
-                                        height.toFloat()
-                                    ),
-                                    points = it
-                                )
+        ARSceneView(
+            engine = engine,
+            materialLoader = materialLoader,
+            sessionConfiguration = { session, config ->
+                val filter = CameraConfigFilter(session).apply {
+                    setTargetFps(EnumSet.of(CameraConfig.TargetFps.TARGET_FPS_30))
+                }
+
+                session.getSupportedCameraConfigs(filter)
+                    .firstOrNull()
+                    ?.let { session.cameraConfig = it }
+
+                config.geospatialMode = Config.GeospatialMode.ENABLED
+//                config.semanticMode = Config.SemanticMode.ENABLED
+                config.updateMode = Config.UpdateMode.LATEST_CAMERA_IMAGE
+                config.focusMode = Config.FocusMode.FIXED
+//                config.depthMode = Config.DepthMode.AUTOMATIC
+                config.instantPlacementMode = Config.InstantPlacementMode.DISABLED
+                config.lightEstimationMode = Config.LightEstimationMode.ENVIRONMENTAL_HDR
+            },
+            viewNodeWindowManager = windowManager,
+            onSessionUpdated = { session, frame ->
+                val earth = session.earth ?: return@ARSceneView
+
+                if (sphereAnchor == null && frame.camera.trackingState == TrackingState.TRACKING) {
+                    val cameraPose = frame.camera.pose
+                    val targetPose = cameraPose.compose(
+                        Pose.makeTranslation(0f, 0f, -0.2f)
+                    )
+
+                    sphereAnchor = session.createAnchor(targetPose)
+                }
+
+                if (replaceMarker) {
+//                    markerAnchorNode?.let {
+//                        removeChildNode(it)
+//                        it.destroy()
+//                    }
+                    val destLat = currentDestination?.latitude ?: 0.0
+                    val destLng = currentDestination?.longitude ?: 0.0
+
+                    earth.resolveAnchorOnTerrainAsync(
+                        destLat,
+                        destLng,
+                        0.2,
+                        0f, 0f, 0f, 1f
+                    ) { earthAnchor, state ->
+                        if (state == Anchor.TerrainAnchorState.SUCCESS && earth.trackingState == TrackingState.TRACKING) {
+                            markerAnchor = earthAnchor
+
+                            try {
+                                Log.d("ARDebug", "Getting ground altitude")
+                                Log.d("ARDebug", "Earth tracking state is ${earth.trackingState.name}")
+                                val anchorGeoPose = earth.getGeospatialPose(earthAnchor.pose)
+                                groundAltitude = anchorGeoPose.altitude
+                            } catch (e: Exception) {
+                                Log.e("ARDebug", "Failed to get ground altitude: $e")
                             }
+
+                            Log.d("ARDebug", "Geospatial Marker Placed at $destLat, $destLng")
+                        } else {
+                            Log.e("ARDebug", "Terrain Anchor failed: $state")
                         }
                     }
                 }
 
-                sceneView!!
-            },
-            update = { view ->
-                view.currentDestination = currentDestination
+                sourceLocation = Float3(
+                    earth.cameraGeospatialPose.latitude.toFloat(),
+                    earth.cameraGeospatialPose.longitude.toFloat(),
+                    earth.cameraGeospatialPose.altitude.toFloat()
+                )
+
+                if (earth.trackingState == TrackingState.TRACKING) {
+                    if (currentDestination == null) {
+                        val cameraGeo = earth.cameraGeospatialPose
+
+                        setDestination(
+                            LatLng(
+                                cameraGeo.latitude,
+                                cameraGeo.longitude
+                            )
+                        )
+                    }
+                }
+
+                if (markerNode.parent != null)
+                    markerNode.lookAt(frame.camera.pose.position)
+
+                markerAnchor?.let { anchor ->
+                    val cameraGeo = earth.cameraGeospatialPose
+                    val destLat = currentDestination?.latitude ?: 0.0
+                    val destLng = currentDestination?.longitude ?: 0.0
+
+                    collectStats(
+                        anchor,
+                        frame,
+                        cameraGeo,
+                        destLat,
+                        destLng,
+                        groundAltitude
+                    )
+                }
+
+                setHorizontalAccuracy(earth.cameraGeospatialPose.horizontalAccuracy)
+
+//                currentPathState?.let { path ->
+//                            processPath(path = path)?.let {
+//                                visibleSegments = assembleSegments(
+//                                    startPoint = Offset(
+//                                        width.toFloat() / 2f,
+//                                        height.toFloat()
+//                                    ),
+//                                    points = it
+//                                )
+//                            }
+//                        }
             }
-        )
+        ) {
+            sphereAnchor?.let { anchor ->
+                AnchorNode(anchor = anchor) {
+                    SphereNode(
+                        radius = 0.05f, // 5cm radius = 10cm diameter
+                        materialInstance = materialLoader.createColorInstance(Color.Blue)
+                    )
+                }
+            }
+
+            markerAnchor?.let { anchor ->
+                AnchorNode(
+                    anchor = anchor,
+                    apply = {
+                        if (markerNode.parent != this)
+                            addChildNode(markerNode)
+                    }
+                )
+            }
+        }
 
         Canvas(modifier = Modifier.fillMaxSize()) {
             visibleSegments.forEach { segment ->
