@@ -1,5 +1,6 @@
 package com.example.arcoresnippet.ui.screen.arcore
 
+import android.media.Image
 import android.util.Log
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -42,6 +43,7 @@ import com.google.ar.core.Earth
 import com.google.ar.core.Frame
 import com.google.ar.core.GeospatialPose
 import com.google.ar.core.Pose
+import com.google.ar.core.StreetscapeGeometry
 import com.google.ar.core.TrackingState
 import dev.romainguy.kotlin.math.Float3
 import io.github.sceneview.ar.ARSceneView
@@ -75,6 +77,8 @@ fun ARScene(
     ) -> Unit,
     setHorizontalAccuracy: (Double) -> Unit
 ) {
+    val view = LocalView.current
+
     val engine = rememberEngine()
     val materialLoader = rememberMaterialLoader(engine)
     val windowManager = rememberViewNodeManager()
@@ -99,6 +103,7 @@ fun ARScene(
 
     // TODO add a check for complex path drawing possibility
 //    var sceneView by remember { mutableStateOf<ARSceneView?>(null) }
+    var pathFindingEnabled by remember { mutableStateOf(false) }
     val currentPathState by rememberUpdatedState(currentPath)
     var visibleSegments by remember { mutableStateOf<List<List<Offset>>>(emptyList()) }
 
@@ -111,15 +116,17 @@ fun ARScene(
 
     DisposableEffect(currentDestination) {
         replaceMarker = true
-        locationTrackerJob = coroutineScope.launch {
-            while (true) {
-                sourceLocation?.let {
-                    onSourceLocationChanged(
-                        LatLng(it.x.toDouble(), it.y.toDouble())
-                    )
-                }
+        if (pathFindingEnabled) {
+            locationTrackerJob = coroutineScope.launch {
+                while (true) {
+                    sourceLocation?.let {
+                        onSourceLocationChanged(
+                            LatLng(it.x.toDouble(), it.y.toDouble())
+                        )
+                    }
 
-                delay(30000)
+                    delay(30000)
+                }
             }
         }
 
@@ -143,12 +150,23 @@ fun ARScene(
                     ?.let { session.cameraConfig = it }
 
                 config.geospatialMode = Config.GeospatialMode.ENABLED
-//                config.semanticMode = Config.SemanticMode.ENABLED
                 config.updateMode = Config.UpdateMode.LATEST_CAMERA_IMAGE
                 config.focusMode = Config.FocusMode.FIXED
-//                config.depthMode = Config.DepthMode.AUTOMATIC
                 config.instantPlacementMode = Config.InstantPlacementMode.DISABLED
                 config.lightEstimationMode = Config.LightEstimationMode.ENVIRONMENTAL_HDR
+
+                if (
+                    session.isDepthModeSupported(Config.DepthMode.AUTOMATIC) &&
+                    session.isSemanticModeSupported(Config.SemanticMode.ENABLED)
+                ) {
+                    pathFindingEnabled = true
+                    config.depthMode = Config.DepthMode.AUTOMATIC
+                    config.semanticMode = Config.SemanticMode.ENABLED
+                } else {
+                    pathFindingEnabled = false
+                    config.depthMode = Config.DepthMode.DISABLED
+                    config.semanticMode = Config.SemanticMode.DISABLED
+                }
             },
             viewNodeWindowManager = windowManager,
             onSessionUpdated = { session, frame ->
@@ -231,11 +249,9 @@ fun ARScene(
                         destLng,
                         groundAltitude
                     )
-                }
 
-                setHorizontalAccuracy(earth.cameraGeospatialPose.horizontalAccuracy)
-
-//                currentPathState?.let { path ->
+                    if (pathFindingEnabled) {
+                        //                currentPathState?.let { path ->
 //                            processPath(path = path)?.let {
 //                                visibleSegments = assembleSegments(
 //                                    startPoint = Offset(
@@ -246,6 +262,27 @@ fun ARScene(
 //                                )
 //                            }
 //                        }
+                    } else {
+                        val endPoint = PathPoint(
+                            pose = anchor.pose,
+                            frame = frame,
+                            viewWidth = view.width.toFloat(),
+                            viewHeight = view.height.toFloat()
+                        )
+
+                        visibleSegments = listOf(
+                            listOf(
+                                Offset(
+                                    view.width.toFloat() / 2,
+                                    view.height.toFloat()
+                                ),
+                                endPoint.screenOffset
+                            )
+                        )
+                    }
+                }
+
+                setHorizontalAccuracy(earth.cameraGeospatialPose.horizontalAccuracy)
             }
         ) {
             sphereAnchor?.let { anchor ->
@@ -298,7 +335,7 @@ private fun assembleSegments(
 
     points.forEach { pt ->
         if (pt.isVisible) {
-            currentSegment.add(pt.offset)
+            currentSegment.add(pt.screenOffset)
         } else if (currentSegment.isNotEmpty()) {
             segments.add(currentSegment)
             currentSegment = mutableListOf()

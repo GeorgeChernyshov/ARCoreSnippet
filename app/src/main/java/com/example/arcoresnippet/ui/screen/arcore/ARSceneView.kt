@@ -145,76 +145,7 @@
 ////
 //////
 ////
-////    private fun processPathPoint(
-////        latLng: LatLng,
-////        semanticImage: Image?
-////    ): PathPoint? {
-////        return PathPoint(Offset(0f, 0f), true)
-////    }
-//////        return try {
-//////            // 1. Get Altitude (Snaps to terrain if on screen)
-//////            val altitude = getTerrainAltitude(latLng)
-//////
-//////            // 2. Project to Screen
-//////            val pose = earth!!.getPose(
-//////                latLng.latitude,
-//////                latLng.longitude,
-//////                altitude,
-//////                0f, 0f, 0f, 1f
-//////            )
-//////
-//////            val screenOffset = pose.toScreenOffset(
-//////                frame = frame!!,
-//////                viewWidth = width.toFloat(),
-//////                viewHeight = height.toFloat()
-//////            )
-//////
-//////            // 3. Occlusion Test
-//////            val cameraRelativePose = frame!!.camera
-//////                .pose
-//////                .inverse()
-//////                .compose(pose)
-//////
-//////            // Point is visible if it's in front of camera AND not behind a wall
-//////            val isInFront = cameraRelativePose.tz() < 0
-//////            val isNotObscured = semanticImage == null ||
-//////                    !isPointOccluded(
-//////                        offset = screenOffset,
-//////                        semanticImage = semanticImage
-//////                    )
-//////
-//////            PathPoint(screenOffset, isVisible = isInFront && isNotObscured)
-//////        } catch (e: Exception) {
-//////            null
-//////        }
-//////    }
 ////
-////    /** Finds the ground altitude by hit-testing the Streetscape mesh */
-//////    private fun getTerrainAltitude(latLng: LatLng): Double {
-//////        val tentativePose = earth!!.getPose(
-//////            latLng.latitude,
-//////            latLng.longitude,
-//////            groundAltitude,
-//////            0f, 0f, 0f, 1f
-//////        )
-//////
-//////        val screenPos = tentativePose.toScreenOffset(
-//////            frame = frame!!,
-//////            viewWidth = width.toFloat(),
-//////            viewHeight = height.toFloat()
-//////        )
-//////
-//////        if (screenPos.x !in 0f..width.toFloat() || screenPos.y !in 0f..height.toFloat())
-//////            return groundAltitude
-//////
-//////        return frame!!.hitTest(screenPos.x, screenPos.y)
-//////            .firstOrNull {
-//////                it.trackable is StreetscapeGeometry &&
-//////                        (it.trackable as StreetscapeGeometry).type == StreetscapeGeometry.Type.TERRAIN
-//////            }
-//////            ?.let { earth!!.getGeospatialPose(it.hitPose).altitude }
-//////            ?: groundAltitude
-//////    }
 ////
 ////    /** Checks the depth map to see if something is in front of the AR coordinate */
 ////    private fun isPointOccluded(
