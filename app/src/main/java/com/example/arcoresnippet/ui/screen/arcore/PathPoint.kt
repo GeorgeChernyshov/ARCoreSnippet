@@ -12,7 +12,6 @@ data class PathPoint(
     val screenOffset: Offset
 ) {
     var isVisible: Boolean = false
-        private set
 
     constructor(
         pose: Pose,

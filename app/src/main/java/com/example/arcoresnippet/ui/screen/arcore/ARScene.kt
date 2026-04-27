@@ -104,7 +104,6 @@ fun ARScene(
     // TODO add a check for complex path drawing possibility
 //    var sceneView by remember { mutableStateOf<ARSceneView?>(null) }
     var pathFindingEnabled by remember { mutableStateOf(false) }
-    val currentPathState by rememberUpdatedState(currentPath)
     var visibleSegments by remember { mutableStateOf<List<List<Offset>>>(emptyList()) }
 
     var sphereAnchor by remember { mutableStateOf<Anchor?>(null) }
@@ -182,10 +181,6 @@ fun ARScene(
                 }
 
                 if (replaceMarker) {
-//                    markerAnchorNode?.let {
-//                        removeChildNode(it)
-//                        it.destroy()
-//                    }
                     val destLat = currentDestination?.latitude ?: 0.0
                     val destLng = currentDestination?.longitude ?: 0.0
 
@@ -212,6 +207,8 @@ fun ARScene(
                             Log.e("ARDebug", "Terrain Anchor failed: $state")
                         }
                     }
+
+                    replaceMarker = false
                 }
 
                 sourceLocation = Float3(
@@ -251,17 +248,24 @@ fun ARScene(
                     )
 
                     if (pathFindingEnabled) {
-                        //                currentPathState?.let { path ->
-//                            processPath(path = path)?.let {
-//                                visibleSegments = assembleSegments(
-//                                    startPoint = Offset(
-//                                        width.toFloat() / 2f,
-//                                        height.toFloat()
-//                                    ),
-//                                    points = it
-//                                )
-//                            }
-//                        }
+                        val pathPoints = currentPath?.map {
+                            PathPoint(
+                                latLng = it,
+                                earth = earth,
+                                frame = frame,
+                                altitude = groundAltitude,
+                                viewWidth = view.width.toFloat(),
+                                viewHeight = view.height.toFloat()
+                            ).apply { isVisible = true }
+                        } ?: emptyList()
+
+                        visibleSegments = assembleSegments(
+                            startPoint = Offset(
+                                view.width.toFloat() / 2,
+                                view.height.toFloat()
+                            ),
+                            points = pathPoints
+                        )
                     } else {
                         val endPoint = PathPoint(
                             pose = anchor.pose,
