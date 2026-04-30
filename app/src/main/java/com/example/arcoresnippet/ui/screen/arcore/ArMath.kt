@@ -7,6 +7,7 @@ import com.google.android.gms.maps.model.LatLng
 import com.google.ar.core.Earth
 import com.google.ar.core.Frame
 import com.google.ar.core.Pose
+import com.google.ar.core.SemanticLabel
 import com.google.ar.core.StreetscapeGeometry
 import java.nio.ByteOrder
 
@@ -101,19 +102,18 @@ fun Image.getDepthInMeters(
 
 /** Checks the depth map to see if something is in front of the AR coordinate */
 fun Image.isPointOccluded(offset: Offset): Boolean {
+    val label = getSemanticLabel(
+        x = offset.x,
+        y = offset.y,
+        viewWidth = width.toFloat(),
+        viewHeight = height.toFloat()
+    )
+
+    // If the point is projected onto a building, it's likely occluded
+    if (label == SemanticLabel.BUILDING) return true
+
+    // If it's projected onto the sky, it's definitely visible
+    if (label == SemanticLabel.SKY) return false
+
     return false
-//        val label = getSemanticLabel(
-//            x = offset.x,
-//            y = offset.y,
-//            viewWidth = width.toFloat(),
-//            viewHeight = height.toFloat()
-//        )
-//
-//        // If the point is projected onto a building, it's likely occluded
-//        if (label == SemanticLabel.BUILDING) return true
-//
-//        // If it's projected onto the sky, it's definitely visible
-//        if (label == SemanticLabel.SKY) return false
-//
-//        return false
 }

@@ -101,8 +101,6 @@ fun ARScene(
 
     val coroutineScope = rememberCoroutineScope()
 
-    // TODO add a check for complex path drawing possibility
-//    var sceneView by remember { mutableStateOf<ARSceneView?>(null) }
     var pathFindingEnabled by remember { mutableStateOf(false) }
     var visibleSegments by remember { mutableStateOf<List<List<Offset>>>(emptyList()) }
 
@@ -248,7 +246,31 @@ fun ARScene(
                     )
 
                     if (pathFindingEnabled) {
-                        val pathPoints = currentPath?.map {
+                        val semanticImage = frame.acquireSemanticImage()
+                        val cameraPose = frame.camera.pose
+
+                        val interpolatedLatLngs = mutableListOf<LatLng>()
+                        currentPath?.let { path ->
+                            for (i in 0 until path.size - 1) {
+                                val start = path[i]
+                                val end = path[i + 1]
+
+                                // Add the original waypoint
+                                interpolatedLatLngs.add(start)
+
+                                // Add 8 intermediate points
+                                for (j in 1..8) {
+                                    val fraction = j.toDouble() / 9.0 // divide into 9 segments
+                                    val lat = start.latitude + (end.latitude - start.latitude) * fraction
+                                    val lng = start.longitude + (end.longitude - start.longitude) * fraction
+                                    interpolatedLatLngs.add(LatLng(lat, lng))
+                                }
+                            }
+                            // Add the final destination point
+                            if (path.isNotEmpty()) interpolatedLatLngs.add(path.last())
+                        }
+
+                        val pathPoints = interpolatedLatLngs.map {
                             PathPoint(
                                 latLng = it,
                                 earth = earth,
@@ -256,8 +278,11 @@ fun ARScene(
                                 altitude = groundAltitude,
                                 viewWidth = view.width.toFloat(),
                                 viewHeight = view.height.toFloat()
-                            ).apply { isVisible = true }
-                        } ?: emptyList()
+                            ).apply { checkOcclusion(
+                                semanticImage = semanticImage,
+                                cameraPose = cameraPose
+                            ) }
+                        }
 
                         visibleSegments = assembleSegments(
                             startPoint = Offset(

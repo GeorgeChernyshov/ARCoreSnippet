@@ -49,11 +49,10 @@ data class PathPoint(
     // Checks if PathPoint is occluded
     fun checkOcclusion(
         semanticImage: Image,
-        frame: Frame,
+        cameraPose: Pose
     ) {
-        // 3. Occlusion Test
-        val cameraRelativePose = frame.camera
-            .pose
+        // Occlusion Test
+        val cameraRelativePose = cameraPose
             .inverse()
             .compose(pose)
 
