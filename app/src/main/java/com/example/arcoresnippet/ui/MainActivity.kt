@@ -1,5 +1,9 @@
 package com.example.arcoresnippet.ui
 
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -19,10 +23,38 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
+    private lateinit var sensorManager: SensorManager
+
+    private val sensorEventListener = object : SensorEventListener {
+        override fun onAccuracyChanged(p0: Sensor?, p1: Int) {}
+        override fun onSensorChanged(p0: SensorEvent?) {}
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
+        sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE_UNCALIBRATED)
+            ?.let { sensorManager.registerListener(
+                sensorEventListener,
+                it,
+                SensorManager.SENSOR_DELAY_FASTEST
+            ) }
+
+        sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER_UNCALIBRATED)
+            ?.let { sensorManager.registerListener(
+                sensorEventListener,
+                it,
+                SensorManager.SENSOR_DELAY_FASTEST
+            ) }
+
         setContent { App() }
+    }
+
+    override fun onDestroy() {
+        sensorManager.unregisterListener(sensorEventListener)
+
+        super.onDestroy()
     }
 
     @Composable
