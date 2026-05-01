@@ -82,7 +82,7 @@ fun ARScene(
     val engine = rememberEngine()
     val materialLoader = rememberMaterialLoader(engine)
     val windowManager = rememberViewNodeManager()
-        .apply { this.resume(LocalView.current) }
+//        .apply { this.resume(view) }
 
     val markerNode = remember {
         ViewNode(
@@ -130,6 +130,14 @@ fun ARScene(
         onDispose {
             locationTrackerJob?.cancel()
             locationTrackerJob = null
+        }
+    }
+
+    DisposableEffect(markerNode) {
+        onDispose {
+            if (engine.isValid) {
+                engine.renderableManager.destroy(markerNode.entity)
+            }
         }
     }
 
